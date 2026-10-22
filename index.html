@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AlgoType - Ôn thi Olympic Tin học C++</title>
+    <meta name="description" content="Nền tảng ôn thi Olympic Tin học Sinh viên Chuyên tin: Luyện gõ thuộc template C++, sổ điều then chốt, kho đề 2020-2025, sổ lỗi và bài biến thể." />
+    <meta property="og:title" content="AlgoType - Ôn thi Olympic Tin học C++" />
+    <meta property="og:description" content="Nền tảng ôn thi Olympic Tin học Sinh viên Chuyên tin: Luyện gõ thuộc template C++, sổ điều then chốt, kho đề 2020-2025, sổ lỗi và bài biến thể." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Tailwind CSS Standalone CDN for instant universal styling in any browser & GitHub Pages -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              blue: {
+                900: '#1e3a8a',
+                950: '#172554'
+              }
+            }
+          }
+        }
+      };
+    </script>
+
+    <!-- Custom AlgoType Paper Theme Stylesheet -->
+    <link rel="stylesheet" href="./style.css?v=2.2" />
+  </head>
+  <body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+    <!-- Top Navigation Bar -->
+    <header class="bg-white border-b border-slate-300 sticky top-0 z-40 shadow-xs">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
+        <!-- Brand Wordmark -->
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded bg-blue-900 text-white font-bold flex items-center justify-center font-mono text-base shadow-xs select-none">
+            C++
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight text-slate-900 leading-none">
+              AlgoType <span class="text-xs font-normal text-blue-900 font-mono">Chuyên tin</span>
+            </h1>
+            <div class="text-[11px] text-slate-500 mt-0.5">Olympic Tin học Sinh viên</div>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="flex items-center gap-1 overflow-x-auto text-xs py-1">
+          <button data-view="today" class="nav-tab-btn active-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5">
+            <span>Ôn hôm nay</span>
+            <span id="badge-nav-today" class="hidden px-1.5 py-0.2 bg-amber-400 text-amber-950 font-bold rounded-full text-[10px]">0</span>
+          </button>
+          <button data-view="practice" class="nav-tab-btn inactive-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer">
+            Luyện gõ template
+          </button>
+          <button data-view="problems" class="nav-tab-btn inactive-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer">
+            Kho đề 2020-2025
+          </button>
+          <button data-view="mock" class="nav-tab-btn inactive-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer flex items-center gap-1">
+            <span>⏱️ Thi thử 180p</span>
+            <span id="badge-nav-mock-live" class="hidden w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+          </button>
+          <button data-view="formulas" class="nav-tab-btn inactive-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer">
+            📖 Sổ công thức
+          </button>
+          <button data-view="mistakes" class="nav-tab-btn inactive-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer">
+            Sổ lỗi
+          </button>
+          <button data-view="variants" class="nav-tab-btn inactive-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer">
+            Bài biến thể
+          </button>
+          <button data-view="stats" class="nav-tab-btn inactive-nav-tab px-3 py-1.5 rounded transition-all whitespace-nowrap cursor-pointer">
+            Thống kê & Sao lưu
+          </button>
+          <!-- Keyboard shortcut helper button -->
+          <button id="btn-open-shortcuts" class="ml-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-mono font-bold rounded text-xs cursor-pointer" title="Phím tắt trợ giúp (?)">
+            ?
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+      <div id="main-content">
+        <!-- Rendered dynamically by js/app.js -->
+      </div>
+    </main>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="modal-shortcuts" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+      <div class="bg-white border-2 border-slate-300 rounded-lg max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between border-b pb-2">
+          <h3 class="font-bold text-base text-slate-900 flex items-center gap-2">
+            <span>⌨️ Bảng Phím Tắt Hệ Thống</span>
+          </h3>
+          <button id="btn-close-shortcuts" class="text-slate-400 hover:text-slate-800 text-lg font-bold cursor-pointer">✕</button>
+        </div>
+        <div class="space-y-2.5 text-xs">
+          <div class="flex items-center justify-between p-2 bg-slate-50 rounded">
+            <span class="text-slate-700">Nhảy qua thụt lề (Indentation):</span>
+            <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800">Tab</kbd>
+          </div>
+          <div class="flex items-center justify-between p-2 bg-slate-50 rounded">
+            <span class="text-slate-700">Hiện gợi ý 12 ký tự (chế độ Nhớ):</span>
+            <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800">Esc</kbd>
+          </div>
+          <div class="flex items-center justify-between p-2 bg-slate-50 rounded">
+            <span class="text-slate-700">Lật thẻ flashcard điều then chốt:</span>
+            <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800">Space / Enter</kbd>
+          </div>
+          <div class="flex items-center justify-between p-2 bg-slate-50 rounded">
+            <span class="text-slate-700">Mở bảng trợ giúp phím tắt này:</span>
+            <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800">?</kbd>
+          </div>
+        </div>
+        <div class="text-center pt-2 border-t">
+          <button id="btn-ok-shortcuts" class="w-full py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded text-xs font-semibold cursor-pointer">
+            Đã hiểu
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quiet Footer -->
+    <footer class="border-t border-slate-200 bg-white/60 py-4 text-center text-xs text-slate-500">
+      <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div>AlgoType v2 · Nền tảng ôn thi Olympic Tin học Sinh viên Chuyên tin</div>
+        <div class="font-mono text-[11px] text-slate-400">
+          Chạy thuần client-side ES Modules · Lưu trữ localStorage an toàn
+        </div>
+      </div>
+    </footer>
+
+    <!-- App Entrypoint Script -->
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
