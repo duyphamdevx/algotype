@@ -1,7 +1,7 @@
 // Data Store and State Management for AlgoType v2
 // LocalStorage key: algotype-v2 (with automated non-destructive migration from algotype-v1)
 
-import { BUILTIN_ALGOS } from '../data/builtins.js';
+import { BUILTIN_ALGOS, CORE_BUILTIN_ALGOS, ADVANCED_BUILTIN_ALGOS, ALL_BUILTIN_ALGOS } from '../data/builtins.js';
 import { PAST_PROBLEMS } from '../data/problems.js';
 import { BUILTIN_QA } from '../data/qa.js';
 import { INITIAL_FORMULAS } from '../data/formulas.js';
@@ -32,10 +32,10 @@ const INITIAL_SAMPLE_NOTES = [
     createdAt: Date.now() - 2 * 86400000
   },
   {
-    id: "note_fib_gcd",
+    id: "note_mod_inverse",
     refType: "algo",
-    refId: "matrix_exponentiation",
-    text: "Hằng đẳng thức quan trọng: gcd(Fib(a), Fib(b)) = Fib(gcd(a, b)). Với MOD >= 10^18, phép nhân ma trận phải dùng __int128 mulmod.",
+    refId: "extended_gcd_mod_inverse",
+    text: "Nghịch đảo modulo của A theo M tồn tại <=> gcd(A, M) = 1. Khi M nguyên tố, dùng Định lý Fermat nhỏ: A^(M-2) % M.",
     box: 0,
     last: Date.now() - 86400000,
     createdAt: Date.now() - 86400000
@@ -224,7 +224,7 @@ class Store {
 
     // Propagate Vietnamese titles (titleVi) from builtins to existing saved data
     const builtinMap = new Map();
-    BUILTIN_ALGOS.forEach(b => builtinMap.set(b.id, b));
+    ALL_BUILTIN_ALGOS.forEach(b => builtinMap.set(b.id, b));
     STRESS_TEST_SNIPPETS.forEach(s => builtinMap.set(s.id, s));
     if (Array.isArray(data.algos)) {
       data.algos.forEach(a => {
@@ -246,12 +246,27 @@ class Store {
         last: 'segtree_point_range',
         examDate: '2026-12-10',
         dailyGoalAlgos: 3,
-        dailyGoalProblems: 1
+        dailyGoalProblems: 1,
+        libraryScope: 'core'
       };
     }
+    if (!data.set.libraryScope) data.set.libraryScope = 'core';
     if (!data.set.examDate) data.set.examDate = '2026-12-10';
     if (!data.set.dailyGoalAlgos) data.set.dailyGoalAlgos = 3;
     if (!data.set.dailyGoalProblems) data.set.dailyGoalProblems = 1;
+
+    // Filter out advanced algorithms when scope is 'core' (default)
+    if (data.set.libraryScope === 'core') {
+      const advancedIds = new Set(ADVANCED_BUILTIN_ALGOS.map(a => a.id));
+      data.algos = data.algos.filter(a => !advancedIds.has(a.id));
+
+      // Ensure all 17 core algorithms are present
+      CORE_BUILTIN_ALGOS.forEach(core => {
+        if (!data.algos.some(a => a.id === core.id)) {
+          data.algos.push(JSON.parse(JSON.stringify(core)));
+        }
+      });
+    }
 
     if (!Array.isArray(data.notes)) data.notes = [];
     if (!data.problemStates || typeof data.problemStates !== 'object') data.problemStates = {};
@@ -348,8 +363,47 @@ class Store {
     this.save();
   }
 
-  resetToDefaultAlgos() {
-    this.db.algos = [...JSON.parse(JSON.stringify(BUILTIN_ALGOS)), ...JSON.parse(JSON.stringify(STRESS_TEST_SNIPPETS))];
+  setLibraryScope(scope = 'core') {
+    if (!this.db.set) this.db.set = {};
+    this.db.set.libraryScope = scope;
+
+    if (scope === 'all') {
+      ALL_BUILTIN_ALGOS.forEach(a => {
+        if (!this.db.algos.some(existing => existing.id === a.id)) {
+          this.db.algos.push(JSON.parse(JSON.stringify(a)));
+        }
+      });
+    } else {
+      const advancedIds = new Set(ADVANCED_BUILTIN_ALGOS.map(a => a.id));
+      this.db.algos = this.db.algos.filter(a => !advancedIds.has(a.id));
+      CORE_BUILTIN_ALGOS.forEach(core => {
+        if (!this.db.algos.some(existing => existing.id === core.id)) {
+          this.db.algos.push(JSON.parse(JSON.stringify(core)));
+        }
+      });
+    }
+
+    this.db.algos.forEach(a => {
+      if (!this.db.stats[a.id]) {
+        this.db.stats[a.id] = { box: 0, last: 0, runs: 0, bw: 0, bt: 0 };
+      }
+    });
+
+    this.save();
+  }
+
+  resetToDefaultAlgos(scope = this.db?.set?.libraryScope || 'core') {
+    const baseList = scope === 'all' ? ALL_BUILTIN_ALGOS : CORE_BUILTIN_ALGOS;
+    this.db.algos = [...JSON.parse(JSON.stringify(baseList)), ...JSON.parse(JSON.stringify(STRESS_TEST_SNIPPETS))];
+    if (Array.isArray(this.db.custom)) {
+      this.db.custom.forEach(c => {
+        if (!this.db.algos.some(a => a.id === c.id)) {
+          this.db.algos.push(c);
+        }
+      });
+    }
+    if (!this.db.set) this.db.set = {};
+    this.db.set.libraryScope = scope;
     this.db.qa = JSON.parse(JSON.stringify(BUILTIN_QA));
     this.save();
   }

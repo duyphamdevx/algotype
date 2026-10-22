@@ -1,7 +1,95 @@
-// 35 Built-in C++17 Templates for Olympic Informatics (Chuyen Tin)
+// AlgoType C++17 Templates for Olympic Informatics (Chuyen Tin & ICPC)
 // English comments in ASCII only
 
-export const BUILTIN_ALGOS = [
+// 17 Thuat toan co ban va quan trong nhat
+export const CORE_BUILTIN_ALGOS = [
+  {
+    id: "fast_io",
+    titleVi: "Đọc ghi nhanh Fast I/O & Phép tính số học Modulo",
+    title: "Fast I/O & Modular Arithmetic Helpers",
+    tag: "Utility",
+    code: `// Fast I/O and Standard Competitive Programming Template
+#include <bits/stdc++.h>
+using namespace std;
+
+void fast_io() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+}
+
+long long add_mod(long long a, long long b, long long m) {
+    return (a + b) % m;
+}
+
+long long mul_mod(long long a, long long b, long long m) {
+    return (long long)((__int128)a * b % m);
+}`
+  },
+  {
+    id: "dsu",
+    titleVi: "Tập hợp rời nhau DSU (Nén đường đi & Gộp hạng)",
+    title: "Disjoint Set Union (DSU with Path Compression & Rank)",
+    tag: "Data Structures",
+    code: `// Disjoint Set Union
+#include <bits/stdc++.h>
+using namespace std;
+
+struct DSU {
+    vector<int> parent, sz;
+    DSU(int n) {
+        parent.resize(n + 1);
+        iota(parent.begin(), parent.end(), 0);
+        sz.assign(n + 1, 1);
+    }
+
+    int find(int u) {
+        if (u == parent[u]) return u;
+        return parent[u] = find(parent[u]);
+    }
+
+    bool unite(int u, int v) {
+        u = find(u);
+        v = find(v);
+        if (u == v) return false;
+        if (sz[u] < sz[v]) swap(u, v);
+        parent[v] = u;
+        sz[u] += sz[v];
+        return true;
+    }
+};`
+  },
+  {
+    id: "fenwick_tree",
+    titleVi: "Cây Fenwick (Cây chỉ số nhị phân - BIT)",
+    title: "Fenwick Tree (Binary Indexed Tree)",
+    tag: "Data Structures",
+    code: `// Fenwick Tree (Point Add, Prefix Sum)
+#include <bits/stdc++.h>
+using namespace std;
+
+struct Fenwick {
+    int n;
+    vector<long long> bit;
+    Fenwick(int n) : n(n), bit(n + 1, 0) {}
+
+    void add(int idx, long long val) {
+        for (; idx <= n; idx += idx & -idx)
+            bit[idx] += val;
+    }
+
+    long long query(int idx) {
+        long long sum = 0;
+        for (; idx > 0; idx -= idx & -idx)
+            sum += bit[idx];
+        return sum;
+    }
+
+    long long query_range(int l, int r) {
+        if (l > r) return 0;
+        return query(r) - query(l - 1);
+    }
+};`
+  },
   {
     id: "segtree_point_range",
     titleVi: "Cây phân đoạn (Cập nhật điểm, Tính tổng đoạn)",
@@ -77,71 +165,6 @@ long long query_range(int node, int l, int r, int ql, int qr) {
 }`
   },
   {
-    id: "fenwick_tree",
-    titleVi: "Cây Fenwick (Cây chỉ số nhị phân - BIT)",
-    title: "Fenwick Tree (Binary Indexed Tree)",
-    tag: "Data Structures",
-    code: `// Fenwick Tree (Point Add, Prefix Sum)
-#include <bits/stdc++.h>
-using namespace std;
-
-struct Fenwick {
-    int n;
-    vector<long long> bit;
-    Fenwick(int n) : n(n), bit(n + 1, 0) {}
-
-    void add(int idx, long long val) {
-        for (; idx <= n; idx += idx & -idx)
-            bit[idx] += val;
-    }
-
-    long long query(int idx) {
-        long long sum = 0;
-        for (; idx > 0; idx -= idx & -idx)
-            sum += bit[idx];
-        return sum;
-    }
-
-    long long query_range(int l, int r) {
-        if (l > r) return 0;
-        return query(r) - query(l - 1);
-    }
-};`
-  },
-  {
-    id: "dsu",
-    titleVi: "Tập hợp rời nhau DSU (Nén đường đi & Gộp hạng)",
-    title: "Disjoint Set Union (DSU with Path Compression & Rank)",
-    tag: "Data Structures",
-    code: `// Disjoint Set Union
-#include <bits/stdc++.h>
-using namespace std;
-
-struct DSU {
-    vector<int> parent, sz;
-    DSU(int n) {
-        parent.resize(n + 1);
-        iota(parent.begin(), parent.end(), 0);
-        sz.assign(n + 1, 1);
-    }
-
-    int find(int u) {
-        if (u == parent[u]) return u;
-        return parent[u] = find(parent[u]);
-    }
-
-    bool unite(int u, int v) {
-        u = find(u);
-        v = find(v);
-        if (u == v) return false;
-        if (sz[u] < sz[v]) swap(u, v);
-        parent[v] = u;
-        sz[u] += sz[v];
-        return true;
-    }
-};`
-  },
-  {
     id: "dijkstra",
     titleVi: "Thuật toán Dijkstra (Tìm đường đi ngắn nhất)",
     title: "Dijkstra (Shortest Path)",
@@ -175,43 +198,6 @@ vector<long long> dijkstra(int n, int start, const vector<vector<pair<int, long 
         }
     }
     return dist;
-}`
-  },
-  {
-    id: "bellman_ford",
-    titleVi: "Thuật toán Bellman-Ford (Cạnh âm & Chu trình âm)",
-    title: "Bellman-Ford (Negative Edge & Cycle Detection)",
-    tag: "Graph",
-    code: `// Bellman-Ford algorithm
-#include <bits/stdc++.h>
-using namespace std;
-
-struct Edge {
-    int u, v;
-    long long w;
-};
-
-const long long INF = 1e18;
-
-bool bellman_ford(int n, int start, const vector<Edge>& edges, vector<long long>& dist) {
-    dist.assign(n + 1, INF);
-    dist[start] = 0;
-
-    for (int i = 1; i <= n - 1; ++i) {
-        for (const auto& e : edges) {
-            if (dist[e.u] < INF && dist[e.u] + e.w < dist[e.v]) {
-                dist[e.v] = dist[e.u] + e.w;
-            }
-        }
-    }
-
-    // Check negative cycle
-    for (const auto& e : edges) {
-        if (dist[e.u] < INF && dist[e.u] + e.w < dist[e.v]) {
-            return true; // Negative cycle reachable
-        }
-    }
-    return false;
 }`
   },
   {
@@ -321,6 +307,300 @@ void dfs(int u, int p = -1) {
 }`
   },
   {
+    id: "lca_binary_lifting",
+    titleVi: "Tổ tiên chung gần nhất LCA (Nhảy nhị phân)",
+    title: "Lowest Common Ancestor (Binary Lifting)",
+    tag: "Trees",
+    code: `// LCA using Binary Lifting
+#include <bits/stdc++.h>
+using namespace std;
+
+const int MAXN = 200005;
+const int LOGN = 19;
+vector<int> adj[MAXN];
+int up[MAXN][LOGN];
+int depth[MAXN];
+
+void dfs(int u, int p, int d) {
+    depth[u] = d;
+    up[u][0] = p;
+    for (int j = 1; j < LOGN; ++j) {
+        up[u][j] = up[up[u][j - 1]][j - 1];
+    }
+    for (int v : adj[u]) {
+        if (v != p) dfs(v, u, d + 1);
+    }
+}
+
+int get_lca(int u, int v) {
+    if (depth[u] < depth[v]) swap(u, v);
+    for (int j = LOGN - 1; j >= 0; --j) {
+        if (depth[u] - (1 << j) >= depth[v]) {
+            u = up[u][j];
+        }
+    }
+    if (u == v) return u;
+    for (int j = LOGN - 1; j >= 0; --j) {
+        if (up[u][j] != up[v][j]) {
+            u = up[u][j];
+            v = up[v][j];
+        }
+    }
+    return up[u][0];
+}`
+  },
+  {
+    id: "hash_string_double",
+    titleVi: "Băm chuỗi kép (Double Rolling Hash chống tràn đụng độ)",
+    title: "Double String Hash (Rolling Hash)",
+    tag: "Strings",
+    code: `// Double Rolling Hash for fast substring equality
+#include <bits/stdc++.h>
+using namespace std;
+
+const long long BASE1 = 311, MOD1 = 1e9 + 7;
+const long long BASE2 = 317, MOD2 = 1e9 + 9;
+
+struct StringHash {
+    int n;
+    vector<long long> h1, h2, p1, p2;
+
+    StringHash(const string& s) : n(s.size()), h1(n + 1), h2(n + 1), p1(n + 1), p2(n + 1) {
+        p1[0] = p2[0] = 1;
+        for (int i = 0; i < n; ++i) {
+            p1[i + 1] = (p1[i] * BASE1) % MOD1;
+            p2[i + 1] = (p2[i] * BASE2) % MOD2;
+            h1[i + 1] = (h1[i] * BASE1 + s[i]) % MOD1;
+            h2[i + 1] = (h2[i] * BASE2 + s[i]) % MOD2;
+        }
+    }
+
+    pair<long long, long long> get_hash(int l, int r) { // 1-indexed [l, r]
+        long long hash1 = (h1[r] - h1[l - 1] * p1[r - l + 1]) % MOD1;
+        if (hash1 < 0) hash1 += MOD1;
+        long long hash2 = (h2[r] - h2[l - 1] * p2[r - l + 1]) % MOD2;
+        if (hash2 < 0) hash2 += MOD2;
+        return {hash1, hash2};
+    }
+};`
+  },
+  {
+    id: "trie",
+    titleVi: "Cây tiền tố Trie (Tra cứu & Thêm xâu ký tự)",
+    title: "Trie (Prefix Tree)",
+    tag: "Strings",
+    code: `// Prefix Tree (Trie)
+#include <bits/stdc++.h>
+using namespace std;
+
+struct TrieNode {
+    int next_node[26];
+    bool is_end = false;
+    TrieNode() {
+        memset(next_node, -1, sizeof(next_node));
+    }
+};
+
+struct Trie {
+    vector<TrieNode> nodes;
+    Trie() { nodes.emplace_back(); }
+
+    void insert(const string& s) {
+        int u = 0;
+        for (char c : s) {
+            int ch = c - 'a';
+            if (nodes[u].next_node[ch] == -1) {
+                nodes[u].next_node[ch] = nodes.size();
+                nodes.emplace_back();
+            }
+            u = nodes[u].next_node[ch];
+        }
+        nodes[u].is_end = true;
+    }
+
+    bool search(const string& s) {
+        int u = 0;
+        for (char c : s) {
+            int ch = c - 'a';
+            if (nodes[u].next_node[ch] == -1) return false;
+            u = nodes[u].next_node[ch];
+        }
+        return nodes[u].is_end;
+    }
+};`
+  },
+  {
+    id: "kmp_string_matching",
+    titleVi: "Thuật toán khớp chuỗi KMP (Knuth-Morris-Pratt)",
+    title: "KMP String Matching",
+    tag: "Strings",
+    code: `// Knuth-Morris-Pratt Algorithm
+#include <bits/stdc++.h>
+using namespace std;
+
+vector<int> compute_pi(const string& s) {
+    int n = s.size();
+    vector<int> pi(n, 0);
+    for (int i = 1; i < n; ++i) {
+        int j = pi[i - 1];
+        while (j > 0 && s[i] != s[j]) j = pi[j - 1];
+        if (s[i] == s[j]) ++j;
+        pi[i] = j;
+    }
+    return pi;
+}
+
+vector<int> kmp_search(const string& text, const string& pat) {
+    string combined = pat + "#" + text;
+    vector<int> pi = compute_pi(combined);
+    vector<int> matches;
+    int m = pat.size();
+    for (int i = m + 1; i < (int)combined.size(); ++i) {
+        if (pi[i] == m) {
+            matches.push_back(i - 2 * m);
+        }
+    }
+    return matches;
+}`
+  },
+  {
+    id: "linear_sieve",
+    titleVi: "Sàng nguyên tố tuyến tính (Sàng Euler & Ước nguyên tố nhỏ nhất)",
+    title: "Linear Sieve (Euler Sieve & Smallest Prime Factor)",
+    tag: "Math",
+    code: `// Linear Sieve O(N) with SPF (Smallest Prime Factor)
+#include <bits/stdc++.h>
+using namespace std;
+
+const int MAXN = 10000005;
+int spf[MAXN];
+vector<int> primes;
+
+void linear_sieve(int n) {
+    for (int i = 2; i <= n; ++i) {
+        if (spf[i] == 0) {
+            spf[i] = i;
+            primes.push_back(i);
+        }
+        for (int p : primes) {
+            if (p > spf[i] || (long long)i * p > n) break;
+            spf[i * p] = p;
+        }
+    }
+}`
+  },
+  {
+    id: "extended_gcd_mod_inverse",
+    titleVi: "Euclid mở rộng & Nghịch đảo Modulo (Extended GCD)",
+    title: "Extended GCD and Modular Inverse",
+    tag: "Math",
+    code: `// Extended Euclidean Algorithm and Modular Inverse
+#include <bits/stdc++.h>
+using namespace std;
+
+long long extgcd(long long a, long long b, long long& x, long long& y) {
+    if (b == 0) {
+        x = 1;
+        y = 0;
+        return a;
+    }
+    long long x1, y1;
+    long long d = extgcd(b, a % b, x1, y1);
+    x = y1;
+    y = x1 - y1 * (a / b);
+    return d;
+}
+
+long long mod_inverse(long long a, long long m) {
+    long long x, y;
+    long long g = extgcd(a, m, x, y);
+    if (g != 1) return -1; // Inverse does not exist
+    return (x % m + m) % m;
+}`
+  },
+  {
+    id: "knapsack_01_space_opt",
+    titleVi: "Quy hoạch động Ba lô 0-1 (Tối ưu mảng 1 chiều)",
+    title: "0-1 Knapsack (1D Space Optimized)",
+    tag: "Dynamic Programming",
+    code: `// 0-1 Knapsack with 1D DP Array
+#include <bits/stdc++.h>
+using namespace std;
+
+long long knapsack(int n, int max_w, const vector<int>& weight, const vector<long long>& val) {
+    vector<long long> dp(max_w + 1, 0);
+    for (int i = 0; i < n; ++i) {
+        for (int w = max_w; w >= weight[i]; --w) {
+            dp[w] = max(dp[w], dp[w - weight[i]] + val[i]);
+        }
+    }
+    return dp[max_w];
+}`
+  },
+  {
+    id: "lis_nlogn",
+    titleVi: "Dãy con tăng dài nhất LIS O(N log N)",
+    title: "Longest Increasing Subsequence O(N log N)",
+    tag: "Dynamic Programming",
+    code: `// LIS in O(N log N) using patience sorting / lower_bound
+#include <bits/stdc++.h>
+using namespace std;
+
+int longest_increasing_subsequence(const vector<int>& a) {
+    vector<int> tails;
+    for (int x : a) {
+        auto it = lower_bound(tails.begin(), tails.end(), x);
+        if (it == tails.end()) {
+            tails.push_back(x);
+        } else {
+            *it = x;
+        }
+    }
+    return tails.size();
+}`
+  }
+];
+
+// 18 Thuat toan nang cao (Tam thoi cat rieng / mo rong khi can)
+export const ADVANCED_BUILTIN_ALGOS = [
+  {
+    id: "bellman_ford",
+    titleVi: "Thuật toán Bellman-Ford (Cạnh âm & Chu trình âm)",
+    title: "Bellman-Ford (Negative Edge & Cycle Detection)",
+    tag: "Graph",
+    code: `// Bellman-Ford algorithm
+#include <bits/stdc++.h>
+using namespace std;
+
+struct Edge {
+    int u, v;
+    long long w;
+};
+
+const long long INF = 1e18;
+
+bool bellman_ford(int n, int start, const vector<Edge>& edges, vector<long long>& dist) {
+    dist.assign(n + 1, INF);
+    dist[start] = 0;
+
+    for (int i = 1; i <= n - 1; ++i) {
+        for (const auto& e : edges) {
+            if (dist[e.u] < INF && dist[e.u] + e.w < dist[e.v]) {
+                dist[e.v] = dist[e.u] + e.w;
+            }
+        }
+    }
+
+    // Check negative cycle
+    for (const auto& e : edges) {
+        if (dist[e.u] < INF && dist[e.u] + e.w < dist[e.v]) {
+            return true; // Negative cycle reachable
+        }
+    }
+    return false;
+}`
+  },
+  {
     id: "dinic_max_flow",
     titleVi: "Thuật toán Dinic (Luồng cực đại trên đồ thị)",
     title: "Dinic Max Flow",
@@ -391,49 +671,6 @@ struct Dinic {
         return flow;
     }
 };`
-  },
-  {
-    id: "lca_binary_lifting",
-    titleVi: "Tổ tiên chung gần nhất LCA (Nhảy nhị phân)",
-    title: "Lowest Common Ancestor (Binary Lifting)",
-    tag: "Trees",
-    code: `// LCA using Binary Lifting
-#include <bits/stdc++.h>
-using namespace std;
-
-const int MAXN = 200005;
-const int LOGN = 19;
-vector<int> adj[MAXN];
-int up[MAXN][LOGN];
-int depth[MAXN];
-
-void dfs(int u, int p, int d) {
-    depth[u] = d;
-    up[u][0] = p;
-    for (int j = 1; j < LOGN; ++j) {
-        up[u][j] = up[up[u][j - 1]][j - 1];
-    }
-    for (int v : adj[u]) {
-        if (v != p) dfs(v, u, d + 1);
-    }
-}
-
-int get_lca(int u, int v) {
-    if (depth[u] < depth[v]) swap(u, v);
-    for (int j = LOGN - 1; j >= 0; --j) {
-        if (depth[u] - (1 << j) >= depth[v]) {
-            u = up[u][j];
-        }
-    }
-    if (u == v) return u;
-    for (int j = LOGN - 1; j >= 0; --j) {
-        if (up[u][j] != up[v][j]) {
-            u = up[u][j];
-            v = up[v][j];
-        }
-    }
-    return up[u][0];
-}`
   },
   {
     id: "heavy_light_decomposition",
@@ -524,40 +761,6 @@ void build_centroid_tree(int u) {
 }`
   },
   {
-    id: "kmp_string_matching",
-    titleVi: "Thuật toán khớp chuỗi KMP (Knuth-Morris-Pratt)",
-    title: "KMP String Matching",
-    tag: "Strings",
-    code: `// Knuth-Morris-Pratt Algorithm
-#include <bits/stdc++.h>
-using namespace std;
-
-vector<int> compute_pi(const string& s) {
-    int n = s.size();
-    vector<int> pi(n, 0);
-    for (int i = 1; i < n; ++i) {
-        int j = pi[i - 1];
-        while (j > 0 && s[i] != s[j]) j = pi[j - 1];
-        if (s[i] == s[j]) ++j;
-        pi[i] = j;
-    }
-    return pi;
-}
-
-vector<int> kmp_search(const string& text, const string& pat) {
-    string combined = pat + "#" + text;
-    vector<int> pi = compute_pi(combined);
-    vector<int> matches;
-    int m = pat.size();
-    for (int i = m + 1; i < (int)combined.size(); ++i) {
-        if (pi[i] == m) {
-            matches.push_back(i - 2 * m);
-        }
-    }
-    return matches;
-}`
-  },
-  {
     id: "z_algorithm",
     titleVi: "Mảng Z & Thuật toán so khớp chuỗi Z-Algorithm",
     title: "Z-Algorithm",
@@ -613,51 +816,6 @@ vector<int> manacher(const string& s) {
     }
     return p;
 }`
-  },
-  {
-    id: "trie",
-    titleVi: "Cây tiền tố Trie (Tra cứu & Thêm xâu ký tự)",
-    title: "Trie (Prefix Tree)",
-    tag: "Strings",
-    code: `// Prefix Tree (Trie)
-#include <bits/stdc++.h>
-using namespace std;
-
-struct TrieNode {
-    int next_node[26];
-    bool is_end = false;
-    TrieNode() {
-        memset(next_node, -1, sizeof(next_node));
-    }
-};
-
-struct Trie {
-    vector<TrieNode> nodes;
-    Trie() { nodes.emplace_back(); }
-
-    void insert(const string& s) {
-        int u = 0;
-        for (char c : s) {
-            int ch = c - 'a';
-            if (nodes[u].next_node[ch] == -1) {
-                nodes[u].next_node[ch] = nodes.size();
-                nodes.emplace_back();
-            }
-            u = nodes[u].next_node[ch];
-        }
-        nodes[u].is_end = true;
-    }
-
-    bool search(const string& s) {
-        int u = 0;
-        for (char c : s) {
-            int ch = c - 'a';
-            if (nodes[u].next_node[ch] == -1) return false;
-            u = nodes[u].next_node[ch];
-        }
-        return nodes[u].is_end;
-    }
-};`
   },
   {
     id: "aho_corasick",
@@ -754,35 +912,6 @@ Matrix power(Matrix a, long long exp) {
 }`
   },
   {
-    id: "extended_gcd_mod_inverse",
-    titleVi: "Euclid mở rộng & Nghịch đảo Modulo (Extended GCD)",
-    title: "Extended GCD and Modular Inverse",
-    tag: "Math",
-    code: `// Extended Euclidean Algorithm and Modular Inverse
-#include <bits/stdc++.h>
-using namespace std;
-
-long long extgcd(long long a, long long b, long long& x, long long& y) {
-    if (b == 0) {
-        x = 1;
-        y = 0;
-        return a;
-    }
-    long long x1, y1;
-    long long d = extgcd(b, a % b, x1, y1);
-    x = y1;
-    y = x1 - y1 * (a / b);
-    return d;
-}
-
-long long mod_inverse(long long a, long long m) {
-    long long x, y;
-    long long g = extgcd(a, m, x, y);
-    if (g != 1) return -1; // Inverse does not exist
-    return (x % m + m) % m;
-}`
-  },
-  {
     id: "combinatorics_ncr",
     titleVi: "Tổ hợp chập K (nCr tiền xử lý giai thừa & Modulo)",
     title: "Combinatorics (nCr with Precomputed Factorials)",
@@ -816,32 +945,6 @@ void precompute() {
 long long nCr(int n, int r) {
     if (r < 0 || r > n) return 0;
     return fact[n] * inv_fact[r] % MOD * inv_fact[n - r] % MOD;
-}`
-  },
-  {
-    id: "linear_sieve",
-    titleVi: "Sàng nguyên tố tuyến tính (Sàng Euler & Ước nguyên tố nhỏ nhất)",
-    title: "Linear Sieve (Euler Sieve & Smallest Prime Factor)",
-    tag: "Math",
-    code: `// Linear Sieve O(N) with SPF (Smallest Prime Factor)
-#include <bits/stdc++.h>
-using namespace std;
-
-const int MAXN = 10000005;
-int spf[MAXN];
-vector<int> primes;
-
-void linear_sieve(int n) {
-    for (int i = 2; i <= n; ++i) {
-        if (spf[i] == 0) {
-            spf[i] = i;
-            primes.push_back(i);
-        }
-        for (int p : primes) {
-            if (p > spf[i] || (long long)i * p > n) break;
-            spf[i * p] = p;
-        }
-    }
 }`
   },
   {
@@ -1128,47 +1231,6 @@ void transitive_closure(int n) {
 }`
   },
   {
-    id: "knapsack_01_space_opt",
-    titleVi: "Quy hoạch động Ba lô 0-1 (Tối ưu mảng 1 chiều)",
-    title: "0-1 Knapsack (1D Space Optimized)",
-    tag: "Dynamic Programming",
-    code: `// 0-1 Knapsack with 1D DP Array
-#include <bits/stdc++.h>
-using namespace std;
-
-long long knapsack(int n, int max_w, const vector<int>& weight, const vector<long long>& val) {
-    vector<long long> dp(max_w + 1, 0);
-    for (int i = 0; i < n; ++i) {
-        for (int w = max_w; w >= weight[i]; --w) {
-            dp[w] = max(dp[w], dp[w - weight[i]] + val[i]);
-        }
-    }
-    return dp[max_w];
-}`
-  },
-  {
-    id: "lis_nlogn",
-    titleVi: "Dãy con tăng dài nhất LIS O(N log N)",
-    title: "Longest Increasing Subsequence O(N log N)",
-    tag: "Dynamic Programming",
-    code: `// LIS in O(N log N) using patience sorting / lower_bound
-#include <bits/stdc++.h>
-using namespace std;
-
-int longest_increasing_subsequence(const vector<int>& a) {
-    vector<int> tails;
-    for (int x : a) {
-        auto it = lower_bound(tails.begin(), tails.end(), x);
-        if (it == tails.end()) {
-            tails.push_back(x);
-        } else {
-            *it = x;
-        }
-    }
-    return tails.size();
-}`
-  },
-  {
     id: "sos_dp",
     titleVi: "Quy hoạch động SOS DP (Sum Over Subsets - Tổng tập con)",
     title: "Sum Over Subsets (SOS) DP",
@@ -1215,62 +1277,11 @@ long long dp(int pos, bool is_tight, bool is_leading_zero) {
     }
     return memo[pos][is_tight][is_leading_zero] = ans;
 }`
-  },
-  {
-    id: "fast_io",
-    titleVi: "Đọc ghi nhanh Fast I/O & Phép tính số học Modulo",
-    title: "Fast I/O & Modular Arithmetic Helpers",
-    tag: "Utility",
-    code: `// Fast I/O and Standard Competitive Programming Template
-#include <bits/stdc++.h>
-using namespace std;
-
-void fast_io() {
-    ios_base::sync_with_stdio(false);
-    cin.tie(NULL);
-}
-
-long long add_mod(long long a, long long b, long long m) {
-    return (a + b) % m;
-}
-
-long long mul_mod(long long a, long long b, long long m) {
-    return (long long)((__int128)a * b % m);
-}`
-  },
-  {
-    id: "hash_string_double",
-    titleVi: "Băm chuỗi kép (Double Rolling Hash chống tràn đụng độ)",
-    title: "Double String Hash (Rolling Hash)",
-    tag: "Strings",
-    code: `// Double Rolling Hash for fast substring equality
-#include <bits/stdc++.h>
-using namespace std;
-
-const long long BASE1 = 311, MOD1 = 1e9 + 7;
-const long long BASE2 = 317, MOD2 = 1e9 + 9;
-
-struct StringHash {
-    int n;
-    vector<long long> h1, h2, p1, p2;
-
-    StringHash(const string& s) : n(s.size()), h1(n + 1), h2(n + 1), p1(n + 1), p2(n + 1) {
-        p1[0] = p2[0] = 1;
-        for (int i = 0; i < n; ++i) {
-            p1[i + 1] = (p1[i] * BASE1) % MOD1;
-            p2[i + 1] = (p2[i] * BASE2) % MOD2;
-            h1[i + 1] = (h1[i] * BASE1 + s[i]) % MOD1;
-            h2[i + 1] = (h2[i] * BASE2 + s[i]) % MOD2;
-        }
-    }
-
-    pair<long long, long long> get_hash(int l, int r) { // 1-indexed [l, r]
-        long long hash1 = (h1[r] - h1[l - 1] * p1[r - l + 1]) % MOD1;
-        if (hash1 < 0) hash1 += MOD1;
-        long long hash2 = (h2[r] - h2[l - 1] * p2[r - l + 1]) % MOD2;
-        if (hash2 < 0) hash2 += MOD2;
-        return {hash1, hash2};
-    }
-};`
   }
 ];
+
+// All 35 Algorithms
+export const ALL_BUILTIN_ALGOS = [...CORE_BUILTIN_ALGOS, ...ADVANCED_BUILTIN_ALGOS];
+
+// Default Active Library: 17 Core Algorithms
+export const BUILTIN_ALGOS = CORE_BUILTIN_ALGOS;

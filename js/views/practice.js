@@ -40,6 +40,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
       keydownHandler = null;
     }
 
+    const currentScope = store.db.set?.libraryScope || 'core';
     const allAlgos = store.getAllAlgos();
     const tags = ['ALL', ...new Set(allAlgos.map(a => a.tag))];
 
@@ -58,19 +59,44 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
         <!-- Top Toolbar -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-300 pb-4">
           <div>
-            <h2 class="text-2xl font-bold tracking-tight text-slate-900 font-serif">Kho Template Thuật toán</h2>
-            <p class="text-sm text-slate-600 mt-0.5">
-              ${allAlgos.length} thuật toán C++17 kèm tên Tiếng Việt & Quốc tế chuẩn. Bạn có thể <strong>thêm mới, sửa đổi, xóa bất kỳ thuật toán nào</strong> hoặc <strong>nhập file .cpp tự động tách đoạn</strong>.
+            <div class="flex items-center gap-2">
+              <h2 class="text-2xl font-bold tracking-tight text-slate-900 font-serif">Kho Template Thuật toán</h2>
+              <span class="px-2 py-0.5 rounded text-xs font-semibold ${
+                currentScope === 'core' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+              }">
+                ${currentScope === 'core' ? '⭐ 17 Thuật toán Cốt lõi & Cơ bản' : '📦 Đầy đủ 35 Thuật toán'}
+              </span>
+            </div>
+            <p class="text-sm text-slate-600 mt-1">
+              ${
+                currentScope === 'core'
+                  ? 'Đang tập trung <strong>17 thuật toán cốt lõi & kinh điển nhất</strong> cho Olympic Tin học (SegTree, BIT, DSU, Dijkstra, Floyd, Tarjan, Cầu/Khớp, LCA, Trie, KMP, Hash, Sàng Euler, Extended GCD, Ba lô, LIS). Các thuật toán nâng cao tạm thời cất gọn.'
+                  : 'Đang hiển thị <strong>toàn bộ 35 thuật toán C++17</strong> (gồm cả các thuật toán nâng cao: Dinic Flow, HLD, Centroid, Aho-Corasick, Manacher, Z, Mo, 2-SAT, Geometry, SOS DP, Digit DP...).'
+              }
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
+            <!-- Mode Switch: Core 17 vs All 35 -->
+            <div class="inline-flex rounded-md shadow-2xs border border-slate-300 p-0.5 bg-slate-100 text-xs">
+              <button id="btn-scope-core" class="px-2.5 py-1 rounded font-medium cursor-pointer transition-colors ${
+                currentScope === 'core' ? 'bg-white text-slate-900 font-semibold shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }">
+                ⭐ 17 Cốt lõi
+              </button>
+              <button id="btn-scope-all" class="px-2.5 py-1 rounded font-medium cursor-pointer transition-colors ${
+                currentScope === 'all' ? 'bg-white text-slate-900 font-semibold shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }">
+                📦 Tất cả 35
+              </button>
+            </div>
+
             <!-- Feature 10: Import .cpp file -->
             <label class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs font-semibold rounded transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs">
               <span>📥 Nhập từ file .cpp</span>
               <input id="input-import-cpp" type="file" accept=".cpp,.h,.hpp,.txt" class="hidden" />
             </label>
-            <button id="btn-reset-default-algos" class="px-3 py-1.5 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium rounded transition-colors cursor-pointer" title="Khôi phục lại 35 thuật toán gốc">
-              🔄 Khôi phục 35 gốc
+            <button id="btn-reset-default-algos" class="px-3 py-1.5 border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-medium rounded transition-colors cursor-pointer" title="${currentScope === 'core' ? 'Khôi phục 17 thuật toán cốt lõi' : 'Khôi phục 35 thuật toán'}">
+              🔄 Khôi phục ${currentScope === 'core' ? '17 cốt lõi' : '35 gốc'}
             </button>
             <button id="btn-add-new-algo" class="px-3.5 py-1.5 bg-blue-900 hover:bg-blue-800 text-white text-xs font-semibold rounded transition-colors cursor-pointer shadow-xs">
               + Thêm thuật toán mới
@@ -292,9 +318,21 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
       });
     });
 
+    container.querySelector('#btn-scope-core')?.addEventListener('click', () => {
+      store.setLibraryScope('core');
+      renderAlgoCatalog();
+    });
+
+    container.querySelector('#btn-scope-all')?.addEventListener('click', () => {
+      store.setLibraryScope('all');
+      renderAlgoCatalog();
+    });
+
     container.querySelector('#btn-reset-default-algos')?.addEventListener('click', () => {
-      if (confirm('Khôi phục lại 35 thuật toán gốc và bộ Stress Test? Các thuật toán bạn đã tự thêm sẽ được giữ nguyên.')) {
-        store.resetToDefaultAlgos();
+      const scope = store.db.set?.libraryScope || 'core';
+      const label = scope === 'core' ? '17 thuật toán cốt lõi & cơ bản nhất' : '35 thuật toán gốc';
+      if (confirm(`Khôi phục lại danh sách ${label} và bộ Stress Test? Các thuật toán bạn đã tự thêm sẽ được giữ nguyên.`)) {
+        store.resetToDefaultAlgos(scope);
         renderAlgoCatalog();
       }
     });
