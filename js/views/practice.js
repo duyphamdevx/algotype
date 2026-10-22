@@ -3,6 +3,7 @@
 import { store, LEITNER_INTERVALS } from '../store.js';
 import { TypingEngine } from '../engine.js';
 import { parseFillBlanks } from '../fill_blank.js';
+import { compareCode, getLocalHeuristicAnalysis } from '../comparator.js';
 
 export function renderPracticeView(container, { initialAlgoId = null, initialMode = 'recall' } = {}) {
   let activeAlgoId = initialAlgoId;
@@ -11,9 +12,18 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
 
   let isFillBlankActive = false;
   let isQAActive = false;
+  let isDiffActive = false;
   let fillBlankAutoMask = false;
   let fillBlankUserInputs = {};
   let fillBlankChecked = false;
+
+  let userTypedCode = '';
+  let lastDiffResult = null;
+  let aiAnalysisState = { loading: false, data: null, error: null };
+  let typingStartTime = null;
+  let typingTimerInterval = null;
+  let elapsedSeconds = 0;
+  let isReferenceVisible = false;
 
   let searchQuery = '';
   let selectedTag = 'ALL';
@@ -22,7 +32,9 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
   let keydownHandler = null;
 
   function render() {
-    if (isTypingActive && activeAlgoId) {
+    if (isDiffActive && activeAlgoId) {
+      renderDiffRoom();
+    } else if (isTypingActive && activeAlgoId) {
       renderTypingRoom();
     } else if (isFillBlankActive && activeAlgoId) {
       renderFillBlankRoom();
@@ -185,11 +197,11 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
                       <div class="mt-4 pt-3 border-t border-slate-100 space-y-2">
                         <!-- Practice Typing buttons -->
                         <div class="flex items-center gap-1.5">
-                          <button data-id="${algo.id}" data-mode="recall" class="btn-launch-practice flex-1 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-medium text-xs rounded text-center transition-colors cursor-pointer">
-                            Gõ Nhớ
+                          <button data-id="${algo.id}" data-mode="recall" class="btn-launch-practice flex-1 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-medium text-xs rounded text-center transition-colors cursor-pointer flex items-center justify-center gap-1 shadow-2xs">
+                            <span>🧠 Gõ thi & So sánh</span>
                           </button>
-                          <button data-id="${algo.id}" data-mode="copy" class="btn-launch-practice flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium text-xs rounded text-center transition-colors cursor-pointer">
-                            Gõ Chép
+                          <button data-id="${algo.id}" data-mode="copy" class="btn-launch-practice py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium text-xs rounded text-center transition-colors cursor-pointer" title="Gõ có mở code mẫu tham khảo">
+                            Chép
                           </button>
                         </div>
 
@@ -288,10 +300,14 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
     container.querySelectorAll('.btn-launch-practice').forEach(btn => {
       btn.addEventListener('click', () => {
         activeAlgoId = btn.getAttribute('data-id');
-        activeMode = btn.getAttribute('data-mode');
+        activeMode = btn.getAttribute('data-mode') || 'recall';
         isTypingActive = true;
+        isDiffActive = false;
         isFillBlankActive = false;
         isQAActive = false;
+        userTypedCode = '';
+        typingStartTime = Date.now();
+        isReferenceVisible = activeMode === 'copy';
         render();
       });
     });
@@ -647,7 +663,38 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
     });
   }
 
-  // --- TYPING ROOM (Multi-line Code Editor Experience) ---
+  // --- AI ANALYSIS CALLER ---
+  async function fetchAIAnalysis(algoTitle, targetCode, userCode, accuracy) {
+    aiAnalysisState = { loading: true, data: null, error: null };
+    renderDiffRoom();
+
+    try {
+      const response = await fetch('/api/analyze-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ algoTitle, targetCode, userCode })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server returned HTTP ${response.status}`);
+      }
+
+      const json = await response.json();
+      if (json && json.success && json.analysis) {
+        aiAnalysisState = { loading: false, data: json.analysis, error: null };
+      } else {
+        throw new Error(json.error || 'Invalid API format');
+      }
+    } catch (err) {
+      console.warn('AI analysis API unreachable or failed, falling back to local heuristic analysis:', err);
+      const fallbackData = getLocalHeuristicAnalysis(algoTitle, userCode, targetCode, accuracy);
+      aiAnalysisState = { loading: false, data: fallbackData, error: null };
+    }
+
+    renderDiffRoom();
+  }
+
+  // --- TYPING ROOM (Free-Form Code Editor & Auto-Compare, NO HINTS) ---
   function renderTypingRoom() {
     const algo = store.getAlgoById(activeAlgoId);
     if (!algo) {
@@ -657,101 +704,127 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
     }
 
     const stat = store.db.stats[algo.id] || { box: 0, last: 0, runs: 0, bw: 0 };
-    const autoIndent = store.db.set.auto ?? true;
-    let editorTheme = store.db.set.editorTheme || 'dark'; // 'dark' (VS Code) | 'light' (Paper)
-    let ghostGuide = store.db.set.ghostGuide !== false; // true: subtle ghost structure in Recall mode
-
-    typingEngine = new TypingEngine({
-      targetCode: algo.code,
-      mode: activeMode,
-      autoIndent,
-      onUpdate: () => renderTypingDisplay(),
-      onComplete: metrics => showCompletionModal(metrics)
-    });
-
+    let editorTheme = store.db.set.editorTheme || 'dark';
     const safeFileName = (algo.id || 'template').replace(/[^a-zA-Z0-9_]/g, '_') + '.cpp';
+
+    // Start timer if not started
+    if (!typingStartTime) {
+      typingStartTime = Date.now();
+      elapsedSeconds = 0;
+    }
+    if (typingTimerInterval) {
+      clearInterval(typingTimerInterval);
+    }
+    typingTimerInterval = setInterval(() => {
+      elapsedSeconds = Math.max(0, Math.floor((Date.now() - typingStartTime) / 1000));
+      const mins = Math.floor(elapsedSeconds / 60);
+      const secs = elapsedSeconds % 60;
+      const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      const timerEl = container.querySelector('#hud-live-timer');
+      if (timerEl) timerEl.textContent = timeStr;
+
+      // Estimate WPM
+      const charCount = userTypedCode.trim().length;
+      const curMins = Math.max(1 / 60, elapsedSeconds / 60);
+      const estWpm = Math.round((charCount / 5) / curMins);
+      const wpmEl = container.querySelector('#hud-live-wpm');
+      if (wpmEl) wpmEl.textContent = estWpm;
+    }, 1000);
+
+    const lineCount = Math.max(1, (userTypedCode.match(/\n/g) || []).length + 1);
+    const charCount = userTypedCode.length;
 
     container.innerHTML = `
       <div class="space-y-4">
         <!-- Room Top Control Bar -->
-        <div class="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-300 p-3 rounded">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-300 p-3.5 rounded shadow-2xs">
           <div class="flex items-center gap-3">
             <button id="btn-back-to-catalog" class="text-xs font-medium px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors cursor-pointer">
               ← Trở về kho
             </button>
             <div>
-              <h2 class="font-bold text-slate-900 text-base leading-tight">
-                ${algo.titleVi || algo.title}
-                ${algo.titleVi && algo.titleVi !== algo.title ? `<span class="text-xs font-normal text-slate-500 font-mono block sm:inline">(${algo.title})</span>` : ''}
-              </h2>
-              <div class="text-xs text-slate-500">
-                ${algo.tag} · Mức Leitner: <span class="font-semibold text-slate-800">${stat.box}/5</span>
+              <div class="flex items-center gap-2">
+                <h2 class="font-bold text-slate-900 text-base leading-tight">
+                  ${algo.titleVi || algo.title}
+                </h2>
+                <span class="text-[11px] px-2 py-0.5 rounded font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+                  🧠 Gõ tự do & Tự động so sánh (Không Hint)
+                </span>
+              </div>
+              <div class="text-xs text-slate-500 mt-0.5">
+                ${algo.tag} · ${algo.title} · Mức Leitner: <span class="font-semibold text-slate-800">${stat.box}/5</span>
               </div>
             </div>
           </div>
 
-          <div class="flex flex-wrap items-center gap-3 text-xs">
-            <!-- Mode Switcher -->
-            <div class="flex items-center bg-slate-100 p-0.5 rounded border border-slate-200">
-              <button id="toggle-mode-copy" class="px-3 py-1 rounded font-medium transition-colors cursor-pointer ${
-                activeMode === 'copy' ? 'bg-blue-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }">
-                📝 Chế độ Chép (Code mẫu)
-              </button>
-              <button id="toggle-mode-recall" class="px-3 py-1 rounded font-medium transition-colors cursor-pointer ${
-                activeMode === 'recall' ? 'bg-blue-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }">
-                🧠 Chế độ Nhớ (Phản xạ)
-              </button>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <!-- Theme Toggle -->
+            <button id="btn-toggle-editor-theme" class="px-2.5 py-1.5 rounded border border-slate-300 hover:bg-slate-100 text-slate-700 cursor-pointer font-sans transition-colors">
+              ${editorTheme === 'dark' ? '☀️ Giao diện Sáng' : '🌙 VS Code Tối'}
+            </button>
+
+            <!-- Optional peek reference template -->
+            <button id="btn-toggle-reference" class="px-2.5 py-1.5 rounded border border-slate-300 hover:bg-slate-100 text-slate-700 cursor-pointer transition-colors">
+              ${isReferenceVisible ? '🙈 Ẩn code mẫu' : '👁️ Tham khảo code mẫu'}
+            </button>
+
+            <!-- Reset Editor -->
+            <button id="btn-clear-code" class="px-2.5 py-1.5 rounded border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 font-medium cursor-pointer transition-colors">
+              🧹 Xóa làm lại
+            </button>
+
+            <!-- Submit & Compare Button -->
+            <button id="btn-submit-and-compare" class="px-4 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-semibold rounded shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors">
+              <span>🚀 Nộp bài & So sánh</span>
+              <span class="text-[10px] opacity-75 font-mono">(Ctrl+↵)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Optional Reference Drawer (Only when user explicitly asks to peek) -->
+        ${
+          isReferenceVisible
+            ? `
+          <div class="bg-amber-50/90 border border-amber-300 rounded p-4 text-xs space-y-2">
+            <div class="flex items-center justify-between font-semibold text-amber-900">
+              <span>📌 Code mẫu chuẩn C++17 (Tham khảo):</span>
+              <span class="text-[11px] text-amber-700">(Đã mở tham khảo, bài thi này sẽ ghi nhận có xem tài liệu)</span>
             </div>
+            <pre class="p-3 bg-white border border-amber-200 rounded font-mono text-xs overflow-x-auto text-slate-800 leading-relaxed max-h-56">${escapeHtml(
+              algo.code
+            )}</pre>
+          </div>
+        `
+            : ''
+        }
 
-            <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 select-none bg-slate-50 px-2 py-1 rounded border border-slate-200">
-              <input id="chk-auto-indent" type="checkbox" ${autoIndent ? 'checked' : ''} />
-              <span>Tự thụt lề (Auto-Indent)</span>
-            </label>
-
-            ${
-              activeMode === 'recall'
-                ? `
-              <label class="flex items-center gap-1.5 cursor-pointer text-slate-700 select-none bg-slate-50 px-2 py-1 rounded border border-slate-200">
-                <input id="chk-ghost-guide" type="checkbox" ${ghostGuide ? 'checked' : ''} />
-                <span>Bóng mờ mờ dẫn đường</span>
-              </label>
-              <button id="btn-reveal-full-code" class="px-2.5 py-1 text-slate-700 hover:text-slate-900 border border-slate-200 rounded hover:bg-slate-100 cursor-pointer">
-                👁️ Hiện toàn bộ code
-              </button>
-            `
-                : ''
-            }
+        <!-- Real-time HUD Metrics Bar -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+          <div class="bg-white border border-slate-200 p-2.5 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Thời gian gõ</div>
+            <div id="hud-live-timer" class="text-xl font-bold font-mono text-blue-900">00:00</div>
+          </div>
+          <div class="bg-white border border-slate-200 p-2.5 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Tốc độ ước tính</div>
+            <div class="text-xl font-bold font-mono text-emerald-700">
+              <span id="hud-live-wpm">0</span> <span class="text-xs font-sans text-slate-500">WPM</span>
+            </div>
+          </div>
+          <div class="bg-white border border-slate-200 p-2.5 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Số dòng code</div>
+            <div id="hud-live-lines" class="text-xl font-bold font-mono text-slate-800">${lineCount}</div>
+          </div>
+          <div class="bg-white border border-slate-200 p-2.5 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Tổng ký tự</div>
+            <div id="hud-live-chars" class="text-xl font-bold font-mono text-indigo-900">${charCount}</div>
           </div>
         </div>
 
-        <!-- Real-time HUD Metrics -->
-        <div class="grid grid-cols-4 gap-2 text-center text-xs">
-          <div class="bg-white border border-slate-200 p-2 rounded shadow-2xs">
-            <div class="text-slate-500 font-medium">Tốc độ (WPM)</div>
-            <div id="hud-wpm" class="text-lg font-bold font-mono text-blue-900">0</div>
-          </div>
-          <div class="bg-white border border-slate-200 p-2 rounded shadow-2xs">
-            <div class="text-slate-500 font-medium">Độ chính xác</div>
-            <div id="hud-acc" class="text-lg font-bold font-mono text-emerald-700">100%</div>
-          </div>
-          <div class="bg-white border border-slate-200 p-2 rounded shadow-2xs">
-            <div class="text-slate-500 font-medium">Lỗi gõ</div>
-            <div id="hud-errors" class="text-lg font-bold font-mono text-rose-700">0</div>
-          </div>
-          <div class="bg-white border border-slate-200 p-2 rounded shadow-2xs">
-            <div class="text-slate-500 font-medium">Tiến độ</div>
-            <div id="hud-progress" class="text-lg font-bold font-mono text-slate-800">0%</div>
-          </div>
-        </div>
-
-        <!-- Professional Code Editor Window -->
+        <!-- Free-form Code Editor Window -->
         <div id="code-editor-root" class="code-editor ${editorTheme === 'dark' ? 'theme-dark' : 'theme-light'}">
-          <!-- Editor Header Bar -->
+          <!-- Editor Topbar -->
           <div class="editor-topbar px-4 py-2 flex items-center justify-between text-xs select-none">
             <div class="flex items-center gap-3">
-              <!-- Window Dots -->
               <div class="flex items-center gap-1.5">
                 <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block"></span>
                 <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block"></span>
@@ -760,150 +833,229 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
               <span class="font-mono font-semibold flex items-center gap-1.5 ml-1">
                 <span class="text-blue-500 font-bold">C++</span> ${safeFileName}
               </span>
-              <span class="text-[10px] px-2 py-0.5 rounded-full ${
-                activeMode === 'copy'
-                  ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30'
-                  : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'
-              } font-sans font-medium">
-                ${activeMode === 'copy' ? 'Chế độ Chép (Hiển thị đầy đủ code)' : 'Chế độ Nhớ (Gõ thuộc lòng)'}
+              <span class="text-[10px] px-2 py-0.5 rounded font-medium bg-blue-500/10 text-blue-500 border border-blue-500/30">
+                Gõ tự do (Tab: 4 spaces · Auto-indent)
               </span>
             </div>
-
-            <div class="flex items-center gap-3 font-mono">
-              <span id="editor-cursor-pos" class="text-[11px] opacity-80">Dòng 1, Cột 1</span>
-              <button id="btn-toggle-editor-theme" class="px-2.5 py-1 rounded text-xs border border-slate-300 dark:border-slate-700 hover:bg-slate-200/40 dark:hover:bg-slate-700/50 cursor-pointer font-sans transition-colors">
-                ${editorTheme === 'dark' ? '☀️ Giao diện Sáng' : '🌙 VS Code Tối'}
-              </button>
+            <div class="font-mono text-[11px] opacity-80" id="editor-line-col-indicator">
+              Dòng 1, Cột 1
             </div>
           </div>
 
-          <!-- Multi-line Code Lines Viewport -->
-          <div
-            id="typing-canvas"
-            tabindex="0"
-            class="editor-viewport"
-            title="Nhấp vào đây và bắt đầu gõ code theo mẫu..."
-          >
+          <!-- Free Editor Input Area with Line Numbers -->
+          <div class="free-editor-container">
+            <div id="free-editor-gutter" class="free-editor-gutter font-mono">
+              <!-- Dynamically rendered line numbers -->
+            </div>
+            <textarea
+              id="free-editor-textarea"
+              class="free-editor-textarea"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              placeholder="// Gõ mã nguồn C++ của thuật toán từ trí nhớ của bạn tại đây...&#10;// Thoải mái xuống dòng, thụt lề, sửa code hoặc đặt tên biến theo phong cách của bạn.&#10;// Nhấn Ctrl + Enter hoặc bấm 'Nộp bài & So sánh' để hệ thống tự động so khớp và AI phân tích!"
+            >${escapeHtml(userTypedCode)}</textarea>
           </div>
 
           <!-- Editor Footer Status Bar -->
           <div class="editor-topbar border-t px-4 py-1.5 flex flex-wrap items-center justify-between text-[11px] select-none opacity-85 font-mono">
             <div class="flex items-center gap-3">
               <span>UTF-8</span>
-              <span>C++17 (g++ -O3)</span>
+              <span>C++17</span>
               <span>Tab: 4 spaces</span>
             </div>
             <div class="flex items-center gap-3 font-sans text-xs">
-              <span><kbd class="px-1 py-0.2 bg-black/10 dark:bg-white/10 rounded font-mono">↵ Enter</kbd>: Xuống dòng</span>
-              <span><kbd class="px-1 py-0.2 bg-black/10 dark:bg-white/10 rounded font-mono">⇥ Tab</kbd>: Thụt lề</span>
-              <span><kbd class="px-1 py-0.2 bg-black/10 dark:bg-white/10 rounded font-mono">⌫ Backspace</kbd>: Sửa lỗi</span>
-              <span><kbd class="px-1 py-0.2 bg-black/10 dark:bg-white/10 rounded font-mono">Esc</kbd>: Gợi ý 12 ký tự</span>
+              <span><kbd class="px-1 py-0.2 bg-black/10 dark:bg-white/10 rounded font-mono">⇥ Tab</kbd>: Thụt lề 4 dấu cách</span>
+              <span><kbd class="px-1 py-0.2 bg-black/10 dark:bg-white/10 rounded font-mono">↵ Enter</kbd>: Xuống dòng giữ lề</span>
+              <span><kbd class="px-1 py-0.2 bg-black/10 dark:bg-white/10 rounded font-mono">Ctrl + ↵</kbd>: Nộp bài & So sánh</span>
             </div>
           </div>
-        </div>
-
-        <!-- Hint & Help Bar -->
-        <div class="flex items-center justify-between text-xs text-slate-500 px-1">
-          <span class="italic">💡 Bạn có thể nhấp chuột vào khung soạn thảo bất kỳ lúc nào để bắt đầu gõ bàn phím.</span>
-          <span id="hint-indicator" class="text-amber-700 font-semibold"></span>
         </div>
 
         <!-- Algo Notes List -->
         <div class="bg-white border border-slate-200 rounded p-4 space-y-3">
           <div class="flex items-center justify-between">
-            <h4 class="font-semibold text-slate-900 text-sm">Điều then chốt đã gắn cho thuật toán này:</h4>
+            <h4 class="font-semibold text-slate-900 text-sm">Điều then chốt của thuật toán này:</h4>
             <button id="btn-add-algo-note" class="text-xs px-2.5 py-1 bg-amber-50 text-amber-900 border border-amber-300 rounded hover:bg-amber-100 cursor-pointer">
               + Thêm ghi chú then chốt
             </button>
           </div>
-          <div id="algo-notes-list" class="space-y-2 text-xs">
-          </div>
-        </div>
-      </div>
-
-      <!-- Completion Modal -->
-      <div id="modal-completion" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
-        <div class="bg-white border-2 border-slate-400 rounded-lg max-w-md w-full p-6 text-center space-y-4 shadow-2xl">
-          <div class="text-4xl">🎯</div>
-          <h3 class="text-xl font-bold text-slate-900 font-serif">Hoàn thành bài gõ!</h3>
-          <div id="modal-completion-body" class="text-sm text-slate-600 space-y-2"></div>
-          <div class="flex items-center gap-3 pt-3">
-            <button id="btn-modal-qa" class="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-semibold rounded cursor-pointer">
-              ❓ Câu hỏi tự kiểm
-            </button>
-            <button id="btn-modal-retry" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium rounded transition-colors cursor-pointer">
-              Gõ lại
-            </button>
-            <button id="btn-modal-back" class="flex-1 py-2 bg-blue-900 hover:bg-blue-800 text-white text-xs font-medium rounded transition-colors cursor-pointer">
-              Về danh sách
-            </button>
-          </div>
+          <div id="algo-notes-list" class="space-y-2 text-xs"></div>
         </div>
       </div>
     `;
 
-    const canvas = container.querySelector('#typing-canvas');
-    const editorRoot = container.querySelector('#code-editor-root');
-    editorRoot?.addEventListener('click', () => canvas.focus());
-    canvas.focus();
+    const textarea = container.querySelector('#free-editor-textarea');
+    const gutter = container.querySelector('#free-editor-gutter');
+    const lineColEl = container.querySelector('#editor-line-col-indicator');
 
-    if (keydownHandler) {
-      window.removeEventListener('keydown', keydownHandler);
+    function updateLineNumbers() {
+      if (!textarea || !gutter) return;
+      const lines = textarea.value.split('\n');
+      const count = Math.max(lines.length, 18);
+      let gutterHtml = '';
+      for (let i = 1; i <= count; i++) {
+        gutterHtml += `<div class="gutter-line">${i}</div>`;
+      }
+      gutter.innerHTML = gutterHtml;
+
+      const linesEl = container.querySelector('#hud-live-lines');
+      if (linesEl) linesEl.textContent = lines.length;
+      const charsEl = container.querySelector('#hud-live-chars');
+      if (charsEl) charsEl.textContent = textarea.value.length;
     }
-    keydownHandler = e => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      typingEngine.handleKeyDown(e);
-    };
-    window.addEventListener('keydown', keydownHandler);
 
-    renderTypingDisplay();
+    function updateCursorPos() {
+      if (!textarea || !lineColEl) return;
+      const val = textarea.value.substring(0, textarea.selectionStart);
+      const lines = val.split('\n');
+      const lineNum = lines.length;
+      const colNum = lines[lines.length - 1].length + 1;
+      lineColEl.textContent = `Dòng ${lineNum}, Cột ${colNum}`;
+    }
+
+    updateLineNumbers();
+    if (textarea) {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+      updateCursorPos();
+
+      // Synchronize scroll
+      textarea.addEventListener('scroll', () => {
+        gutter.scrollTop = textarea.scrollTop;
+      });
+
+      // Handle Tab and Enter auto-indent
+      textarea.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          submitAndCompare();
+          return;
+        }
+
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          const tabSpaces = '    ';
+          textarea.value = textarea.value.substring(0, start) + tabSpaces + textarea.value.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start + tabSpaces.length;
+          userTypedCode = textarea.value;
+          updateLineNumbers();
+          updateCursorPos();
+          return;
+        }
+
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          const val = textarea.value;
+
+          const lastNewline = val.lastIndexOf('\n', start - 1);
+          const currentLine = val.substring(lastNewline + 1, start);
+          const indentMatch = currentLine.match(/^\s*/);
+          let indent = indentMatch ? indentMatch[0] : '';
+
+          if (/[\{\:]\s*$/.test(currentLine)) {
+            indent += '    ';
+          }
+
+          const insertText = '\n' + indent;
+          textarea.value = val.substring(0, start) + insertText + val.substring(end);
+          textarea.selectionStart = textarea.selectionEnd = start + insertText.length;
+          userTypedCode = textarea.value;
+          updateLineNumbers();
+          updateCursorPos();
+          return;
+        }
+      });
+
+      textarea.addEventListener('input', () => {
+        userTypedCode = textarea.value;
+        updateLineNumbers();
+        updateCursorPos();
+      });
+
+      textarea.addEventListener('click', updateCursorPos);
+      textarea.addEventListener('keyup', updateCursorPos);
+    }
+
     renderAlgoNotesList(algo.id);
 
-    container.querySelector('#btn-back-to-catalog')?.addEventListener('click', () => {
+    // Button event bindings
+    function submitAndCompare() {
+      if (!userTypedCode || !userTypedCode.trim()) {
+        alert('Vui lòng gõ mã nguồn thuật toán trước khi nộp bài và so sánh!');
+        return;
+      }
+
+      if (typingTimerInterval) {
+        clearInterval(typingTimerInterval);
+        typingTimerInterval = null;
+      }
+
+      const elapsedMs = Math.max(1000, Date.now() - (typingStartTime || Date.now()));
+      const minutes = elapsedMs / 60000;
+      const wpm = Math.round((userTypedCode.trim().length / 5) / Math.max(0.1, minutes));
+
+      const diff = compareCode(userTypedCode, algo.code);
+
+      // Record typing run into spaced repetition store
+      store.recordTypingRun({
+        id: algo.id,
+        mode: 'recall',
+        wpm,
+        acc: diff.accuracy,
+        usedHint: isReferenceVisible
+      });
+
+      lastDiffResult = {
+        ...diff,
+        wpm,
+        elapsedMs,
+        usedReference: isReferenceVisible
+      };
+
+      isDiffActive = true;
       isTypingActive = false;
       render();
+
+      // Trigger AI Analysis
+      fetchAIAnalysis(algo.titleVi || algo.title, algo.code, userTypedCode, diff.accuracy);
+    }
+
+    container.querySelector('#btn-submit-and-compare')?.addEventListener('click', submitAndCompare);
+
+    container.querySelector('#btn-clear-code')?.addEventListener('click', () => {
+      if (confirm('Bạn có chắc muốn xóa toàn bộ code đã gõ và làm lại từ đầu không?')) {
+        userTypedCode = '';
+        typingStartTime = Date.now();
+        renderTypingRoom();
+      }
     });
 
-    container.querySelector('#toggle-mode-recall')?.addEventListener('click', () => {
-      activeMode = 'recall';
-      isTypingActive = true;
+    container.querySelector('#btn-toggle-reference')?.addEventListener('click', () => {
+      isReferenceVisible = !isReferenceVisible;
       renderTypingRoom();
     });
 
-    container.querySelector('#toggle-mode-copy')?.addEventListener('click', () => {
-      activeMode = 'copy';
-      isTypingActive = true;
-      renderTypingRoom();
-    });
-
-    container.querySelector('#chk-auto-indent')?.addEventListener('change', e => {
-      store.updateSettings({ auto: e.target.checked });
-      typingEngine.autoIndent = e.target.checked;
-    });
-
-    container.querySelector('#chk-ghost-guide')?.addEventListener('change', e => {
-      store.updateSettings({ ghostGuide: e.target.checked });
-      ghostGuide = e.target.checked;
-      renderTypingDisplay();
+    container.querySelector('#btn-back-to-catalog')?.addEventListener('click', () => {
+      if (typingTimerInterval) clearInterval(typingTimerInterval);
+      isTypingActive = false;
+      isDiffActive = false;
+      renderAlgoCatalog();
     });
 
     container.querySelector('#btn-toggle-editor-theme')?.addEventListener('click', () => {
       const nextTheme = editorTheme === 'dark' ? 'light' : 'dark';
       store.updateSettings({ editorTheme: nextTheme });
       editorTheme = nextTheme;
-      if (editorRoot) {
-        editorRoot.className = `code-editor ${editorTheme === 'dark' ? 'theme-dark' : 'theme-light'}`;
-      }
+      const root = container.querySelector('#code-editor-root');
+      if (root) root.className = `code-editor ${editorTheme === 'dark' ? 'theme-dark' : 'theme-light'}`;
       container.querySelector('#btn-toggle-editor-theme').textContent =
         editorTheme === 'dark' ? '☀️ Giao diện Sáng' : '🌙 VS Code Tối';
-      canvas.focus();
-    });
-
-    container.querySelector('#btn-reveal-full-code')?.addEventListener('click', () => {
-      if (confirm('Xem toàn bộ code sẽ đánh dấu bài này là đã xem gợi ý và không được tăng mức Leitner. Bạn có chắc không?')) {
-        typingEngine.revealFullCode();
-        canvas.focus();
-      }
+      textarea?.focus();
     });
 
     container.querySelector('#btn-add-algo-note')?.addEventListener('click', () => {
@@ -915,218 +1067,309 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
     });
   }
 
-  function renderAlgoNotesList(algoId) {
-    const listEl = container.querySelector('#algo-notes-list');
-    if (!listEl) return;
-    const notes = store.getNotesForRef('algo', algoId);
-    if (notes.length === 0) {
-      listEl.innerHTML = `<span class="text-slate-400 italic">Chưa có ghi chú nào. Hãy thêm các tính chất quan trọng để ôn lại định kỳ.</span>`;
+  // --- DIFF & AI ANALYSIS ROOM ---
+  function renderDiffRoom() {
+    const algo = store.getAlgoById(activeAlgoId);
+    if (!algo || !lastDiffResult) {
+      isDiffActive = false;
+      isTypingActive = true;
+      render();
       return;
     }
-    listEl.innerHTML = notes
-      .map(
-        n => `
-      <div class="p-2.5 bg-amber-50/60 border border-amber-200 rounded flex items-start justify-between gap-2">
-        <span class="text-slate-800 leading-relaxed">${n.text}</span>
-        <button data-note-id="${n.id}" class="btn-del-note text-slate-400 hover:text-rose-700 cursor-pointer">✕</button>
-      </div>
-    `
-      )
-      .join('');
 
-    listEl.querySelectorAll('.btn-del-note').forEach(btn => {
-      btn.addEventListener('click', () => {
-        store.deleteNote(btn.getAttribute('data-note-id'));
-        renderAlgoNotesList(algoId);
-      });
-    });
-  }
+    const { accuracy, wpm, elapsedMs, userLineCount, targetLineCount, matchedLinesCount, diffRows, usedReference } =
+      lastDiffResult;
+    const stat = store.db.stats[algo.id] || { box: 0 };
+    const seconds = Math.round(elapsedMs / 1000);
+    const qaList = store.getQAForAlgo(algo.id);
 
-  // --- MULTI-LINE CODE DISPLAY ENGINE ---
-  function renderTypingDisplay() {
-    const canvas = container.querySelector('#typing-canvas');
-    if (!canvas || !typingEngine) return;
-
-    const metrics = typingEngine.getMetrics();
-    const targetCode = typingEngine.targetCode;
-    const pos = typingEngine.pos;
-    const isRecall = typingEngine.mode === 'recall' && !typingEngine.fullCodeRevealed;
-    const hintUntil = typingEngine.hintRevealedUntil;
-    const ghostGuide = store.db.set.ghostGuide !== false;
-    const lastError = typingEngine.lastError;
-
-    // HUD Stats
-    const wpmEl = container.querySelector('#hud-wpm');
-    if (wpmEl) wpmEl.textContent = metrics.wpm;
-    const accEl = container.querySelector('#hud-acc');
-    if (accEl) accEl.textContent = metrics.acc + '%';
-    const errEl = container.querySelector('#hud-errors');
-    if (errEl) errEl.textContent = metrics.errors;
-    const pct = Math.round((pos / Math.max(1, targetCode.length)) * 100);
-    const progEl = container.querySelector('#hud-progress');
-    if (progEl) progEl.textContent = pct + '%';
-
-    const hintEl = container.querySelector('#hint-indicator');
-    if (hintEl) {
-      if (typingEngine.usedHint) {
-        hintEl.textContent = 'Đã dùng gợi ý (Bài này không lên mức Leitner)';
-      } else {
-        hintEl.textContent = '';
-      }
+    let accBadge = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+    let accMsg = 'Rất xuất sắc! Độ khớp thuật toán chuẩn xác.';
+    if (accuracy < 60) {
+      accBadge = 'bg-rose-100 text-rose-800 border-rose-300';
+      accMsg = 'Độ tương đồng còn thấp. Hãy đối chiếu code mẫu bên dưới để xem các phần bị thiếu hoặc khác biệt.';
+    } else if (accuracy < 85) {
+      accBadge = 'bg-amber-100 text-amber-800 border-amber-300';
+      accMsg = 'Khá tốt! Khung sườn thuật toán đã hoàn thành. Hãy đối chiếu chi tiết để hoàn thiện phản xạ.';
     }
 
-    // Split targetCode into real lines
-    const rawLines = targetCode.split('\n');
-    let cumulativeIdx = 0;
-    const lines = rawLines.map((lineText, idx) => {
-      const start = cumulativeIdx;
-      const len = lineText.length;
-      const hasNewline = idx < rawLines.length - 1;
-      const end = start + len + (hasNewline ? 1 : 0);
-      cumulativeIdx = end;
-      return { lineNum: idx + 1, text: lineText, start, end, hasNewline };
-    });
+    container.innerHTML = `
+      <div class="space-y-6">
+        <!-- Top Toolbar -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-300 p-4 rounded shadow-2xs">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-xl font-bold tracking-tight text-slate-900 font-serif">Kết Quả So Sánh & Phân Tích</h2>
+              <span class="px-2.5 py-0.5 rounded text-xs font-semibold border ${accBadge}">
+                Độ khớp: ${accuracy}%
+              </span>
+            </div>
+            <p class="text-xs text-slate-600 mt-1">
+              Thuật toán: <strong>${algo.titleVi || algo.title}</strong> (${algo.tag}) · Hộp Leitner: <strong>${stat.box}/5</strong>
+            </p>
+          </div>
 
-    // Locate active line
-    let activeLineIdx = lines.findIndex(l => pos >= l.start && (pos < l.end || (!l.hasNewline && pos === l.end)));
-    if (activeLineIdx === -1) activeLineIdx = Math.max(0, lines.length - 1);
-    const activeLine = lines[activeLineIdx] || lines[0];
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <button id="btn-diff-retry" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium rounded transition-colors cursor-pointer">
+              ✍️ Gõ lại từ đầu
+            </button>
+            <button id="btn-diff-edit-continue" class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-medium rounded transition-colors cursor-pointer">
+              📝 Sửa tiếp code vừa gõ
+            </button>
+            <button id="btn-diff-qa" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-medium rounded transition-colors cursor-pointer">
+              ❓ Câu hỏi tự kiểm (${qaList.length})
+            </button>
+            <button id="btn-diff-back-catalog" class="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-medium rounded transition-colors cursor-pointer">
+              ← Về kho thuật toán
+            </button>
+          </div>
+        </div>
 
-    // Update Topbar Line & Col counter
-    const cursorLineEl = container.querySelector('#editor-cursor-pos');
-    if (cursorLineEl && activeLine) {
-      const col = Math.max(1, pos - activeLine.start + 1);
-      cursorLineEl.textContent = `Dòng ${activeLine.lineNum}, Cột ${col}`;
-    }
+        <!-- Metrics Dashboard -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs">
+          <div class="bg-white border border-slate-200 p-3 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Độ khớp thuật toán</div>
+            <div class="text-2xl font-bold font-mono ${accuracy >= 80 ? 'text-emerald-700' : accuracy >= 60 ? 'text-amber-700' : 'text-rose-700'}">${accuracy}%</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">${matchedLinesCount}/${targetLineCount} dòng tương đồng</div>
+          </div>
+          <div class="bg-white border border-slate-200 p-3 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Tốc độ gõ thực tế</div>
+            <div class="text-2xl font-bold font-mono text-blue-900">${wpm} <span class="text-xs font-sans text-slate-500">WPM</span></div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Thời gian: ${seconds}s</div>
+          </div>
+          <div class="bg-white border border-slate-200 p-3 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Quy mô code của bạn</div>
+            <div class="text-2xl font-bold font-mono text-slate-800">${userLineCount} <span class="text-xs font-sans text-slate-500">dòng</span></div>
+            <div class="text-[11px] text-slate-400 mt-0.5">Code mẫu: ${targetLineCount} dòng</div>
+          </div>
+          <div class="bg-white border border-slate-200 p-3 rounded shadow-2xs">
+            <div class="text-slate-500 font-medium">Trạng thái ôn tập</div>
+            <div class="text-2xl font-bold font-mono text-indigo-900">Mức ${stat.box}/5</div>
+            <div class="text-[11px] text-slate-400 mt-0.5">${usedReference ? 'Đã xem code mẫu' : 'Gõ thuần từ trí nhớ'}</div>
+          </div>
+        </div>
 
-    // Render multi-line code editor DOM
-    let html = '';
-    for (let li = 0; li < lines.length; li++) {
-      const l = lines[li];
-      const isActive = li === activeLineIdx;
-
-      html += `<div class="editor-line ${isActive ? 'is-active' : ''}" data-line="${l.lineNum}">`;
-      html += `<div class="editor-gutter"><span class="editor-gutter-num">${l.lineNum}</span></div>`;
-      html += `<div class="editor-code-content">`;
-
-      // Render line characters
-      for (let ci = 0; ci < l.text.length; ci++) {
-        const i = l.start + ci;
-        const ch = l.text[ci];
-
-        if (i < pos) {
-          html += `<span class="char-typed">${escapeHtml(ch)}</span>`;
-        } else if (i === pos) {
-          const cls = lastError ? 'char-error' : 'char-cursor cursor-blink';
-          html += `<span class="${cls}">${escapeHtml(ch)}</span>`;
-        } else {
-          if (isRecall) {
-            if (i < hintUntil) {
-              html += `<span class="char-hint">${escapeHtml(ch)}</span>`;
-            } else if (ghostGuide) {
-              html += `<span class="char-ghost">${escapeHtml(ch)}</span>`;
-            } else {
-              html += `<span class="char-hidden">${escapeHtml(ch)}</span>`;
+        <!-- Leitner Banner Feedback -->
+        <div class="p-3.5 rounded border text-xs leading-relaxed ${accuracy >= 80 ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-800'}">
+          <div class="font-semibold">${accMsg}</div>
+          <div class="text-[11px] text-slate-600 mt-0.5">
+            ${
+              stat.box > 0
+                ? `Thuật toán này đang ở Hộp ${stat.box}/5 (Chu kỳ ôn tập kế tiếp: ${LEITNER_INTERVALS[stat.box]} ngày).`
+                : `Thuật toán ở Hộp 0/5. Hãy tiếp tục gõ nhớ để thăng cấp lên hộp tiếp theo!`
             }
-          } else {
-            html += `<span class="char-untyped">${escapeHtml(ch)}</span>`;
+          </div>
+        </div>
+
+        <!-- AI Code Analysis Card (Powered by Gemini 3.8 Flash) -->
+        <div class="bg-white border border-blue-200 rounded-lg p-5 shadow-xs space-y-3">
+          <div class="flex items-center justify-between border-b border-blue-100 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">🤖</span>
+              <h3 class="font-bold text-slate-900 text-sm">Trợ lý AI Phân Tích Logic & Bẫy Phòng Thi (Gemini)</h3>
+            </div>
+            ${
+              aiAnalysisState.loading
+                ? `<span class="inline-flex items-center gap-1.5 text-xs text-blue-700 font-medium animate-pulse">
+                     <span class="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
+                     Đang phân tích code...
+                   </span>`
+                : `<button id="btn-re-ai-analyze" class="text-xs text-blue-900 hover:underline font-medium cursor-pointer">
+                     🔄 Phân tích lại
+                   </button>`
+            }
+          </div>
+
+          ${
+            aiAnalysisState.loading
+              ? `
+            <div class="py-6 text-center space-y-2">
+              <div class="inline-block w-6 h-6 border-2 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
+              <p class="text-xs text-slate-500">Đang kiểm tra tính đúng đắn logic, bẫy tràn số long long, biên đệ quy và tối ưu hoá...</p>
+            </div>
+          `
+              : aiAnalysisState.data
+              ? `
+            <div class="space-y-3 text-xs">
+              <!-- Score & Correctness Badge -->
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="px-2.5 py-1 rounded font-bold text-white ${
+                  aiAnalysisState.data.score >= 85 ? 'bg-emerald-600' : aiAnalysisState.data.score >= 65 ? 'bg-amber-600' : 'bg-rose-600'
+                }">
+                  Điểm AI: ${aiAnalysisState.data.score}/100
+                </span>
+                <span class="font-semibold text-slate-800">
+                  ${aiAnalysisState.data.correctness || 'Đã đánh giá'}
+                </span>
+              </div>
+
+              <!-- Summary -->
+              <div class="p-3 bg-blue-50/60 rounded text-slate-800 leading-relaxed font-sans border border-blue-100">
+                ${aiAnalysisState.data.summary}
+              </div>
+
+              <!-- Potential Bugs & Contest Traps -->
+              ${
+                aiAnalysisState.data.potentialBugs && aiAnalysisState.data.potentialBugs.length > 0
+                  ? `
+                <div class="p-3 bg-amber-50/80 rounded border border-amber-200 text-amber-950 space-y-1">
+                  <div class="font-semibold flex items-center gap-1.5 text-amber-900">
+                    <span>⚠️ Bẫy kỳ thi & Lỗi tiềm ẩn cần lưu ý:</span>
+                  </div>
+                  <ul class="list-disc list-inside space-y-0.5 text-[11px] leading-relaxed text-amber-900">
+                    ${aiAnalysisState.data.potentialBugs.map(b => `<li>${escapeHtml(b)}</li>`).join('')}
+                  </ul>
+                </div>
+              `
+                  : `
+                <div class="p-2.5 bg-emerald-50 rounded border border-emerald-200 text-emerald-900 flex items-center gap-2">
+                  <span>✅</span>
+                  <span>Không phát hiện lỗi tiềm ẩn nguy hiểm. Cấu trúc logic rất chuẩn xác!</span>
+                </div>
+              `
+              }
+
+              <!-- Advice -->
+              ${
+                aiAnalysisState.data.advice
+                  ? `
+                <div class="p-3 bg-slate-50 rounded border border-slate-200 text-slate-800 flex items-start gap-2">
+                  <span class="text-base">💡</span>
+                  <div class="leading-relaxed">
+                    <strong class="text-slate-900">Lời khuyên thực chiến:</strong> ${escapeHtml(aiAnalysisState.data.advice)}
+                  </div>
+                </div>
+              `
+                  : ''
+              }
+            </div>
+          `
+              : `
+            <div class="text-xs text-slate-500 py-3 text-center">
+              Chưa có phân tích. Nhấn "Phân tích lại" để nhận xét chi tiết từ Gemini.
+            </div>
+          `
           }
-        }
-      }
+        </div>
 
-      // Trailing newline
-      if (l.hasNewline) {
-        const nlIdx = l.start + l.text.length;
-        if (pos === nlIdx) {
-          const cls = lastError ? 'char-error' : 'char-cursor cursor-blink';
-          html += `<span class="${cls} char-enter-symbol" title="Nhấn Enter để xuống dòng">↵</span>`;
-        } else if (l.text.length === 0) {
-          // Empty blank line
-          html += `<span class="opacity-30 text-[10px] select-none font-mono">↵</span>`;
-        }
-      }
+        <!-- Side-by-Side Diff Comparison Table -->
+        <div class="bg-white border border-slate-300 rounded-lg overflow-hidden shadow-xs">
+          <!-- Diff Header -->
+          <div class="grid grid-cols-2 bg-slate-100 border-b border-slate-300 text-xs font-semibold text-slate-700 px-4 py-2.5 select-none">
+            <div class="flex items-center justify-between pr-4">
+              <span>Code bạn vừa gõ (${userLineCount} dòng)</span>
+              <span class="text-[10px] text-slate-500 font-normal">Bên trái</span>
+            </div>
+            <div class="flex items-center justify-between pl-4 border-l border-slate-300">
+              <span>Code mẫu C++17 chuẩn (${targetLineCount} dòng)</span>
+              <div class="flex items-center gap-2 text-[10px] font-normal">
+                <span class="inline-flex items-center gap-1 text-emerald-700"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> Khớp</span>
+                <span class="inline-flex items-center gap-1 text-amber-700"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Khác biệt</span>
+                <span class="inline-flex items-center gap-1 text-rose-700"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Lệch dòng</span>
+              </div>
+            </div>
+          </div>
 
-      html += `</div></div>`;
-    }
+          <!-- Aligned Diff Lines -->
+          <div class="max-h-[550px] overflow-y-auto overflow-x-auto divide-y divide-slate-100 font-mono text-xs">
+            ${diffRows
+              .map(row => {
+                let rowBgClass = '';
+                if (row.status === 'match') rowBgClass = 'diff-match';
+                else if (row.status === 'modified') rowBgClass = 'diff-modified';
+                else if (row.status === 'different' || row.status === 'added' || row.status === 'missing')
+                  rowBgClass = 'diff-different';
 
-    canvas.innerHTML = html;
+                return `
+                <div class="grid grid-cols-2 ${rowBgClass} hover:bg-slate-50/50">
+                  <!-- User Line -->
+                  <div class="flex items-start p-1.5 pr-3 border-r border-slate-200">
+                    <span class="diff-gutter text-slate-400 select-none text-[11px] pt-0.5">${row.lineNum}</span>
+                    <pre class="flex-1 whitespace-pre-wrap word-break-all text-slate-900 font-mono text-xs m-0">${escapeHtml(
+                      row.userText ?? ''
+                    )}</pre>
+                  </div>
+                  <!-- Target Line -->
+                  <div class="flex items-start p-1.5 pl-3">
+                    <span class="diff-gutter text-slate-400 select-none text-[11px] pt-0.5">${row.lineNum}</span>
+                    <pre class="flex-1 whitespace-pre-wrap word-break-all text-slate-900 font-mono text-xs m-0">${escapeHtml(
+                      row.targetText ?? ''
+                    )}</pre>
+                  </div>
+                </div>
+              `;
+              })
+              .join('')}
+          </div>
+        </div>
 
-    // Smooth autoscroll to keep active line comfortably in view
-    const activeLineEl = canvas.querySelector(`.editor-line[data-line="${activeLine.lineNum}"]`);
-    if (activeLineEl) {
-      const canvasRect = canvas.getBoundingClientRect();
-      const lineRect = activeLineEl.getBoundingClientRect();
-      if (lineRect.top < canvasRect.top + 50 || lineRect.bottom > canvasRect.bottom - 50) {
-        activeLineEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    }
-  }
-
-  function showCompletionModal(metrics) {
-    const modal = container.querySelector('#modal-completion');
-    const body = container.querySelector('#modal-completion-body');
-    if (!modal || !body) return;
-
-    const algo = store.getAlgoById(activeAlgoId);
-    const prevStat = store.db.stats[algo.id] || { box: 0 };
-    const prevBox = prevStat.box || 0;
-
-    store.recordTypingRun({
-      id: algo.id,
-      mode: activeMode,
-      wpm: metrics.wpm,
-      acc: metrics.acc,
-      usedHint: metrics.usedHint
-    });
-
-    const newStat = store.db.stats[algo.id] || { box: 0 };
-    const newBox = newStat.box || 0;
-
-    let boxFeedback = '';
-    if (activeMode === 'recall') {
-      if (newBox > prevBox) {
-        boxFeedback = `<div class="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded font-semibold">🎉 Lên Hộp ${newBox}/5! Chu kỳ ôn tiếp: ${
-          LEITNER_INTERVALS[newBox]
-        } ngày.</div>`;
-      } else if (metrics.usedHint) {
-        boxFeedback = `<div class="p-2 bg-amber-50 border border-amber-200 text-amber-800 rounded">Bạn đã dùng phím gợi ý / xem trước code nên mức hộp giữ nguyên (${prevBox}/5).</div>`;
-      } else if (metrics.acc < 95) {
-        boxFeedback = `<div class="p-2 bg-rose-50 border border-rose-200 text-rose-800 rounded">Độ chính xác < 95% nên hộp giảm về ${newBox}/5 để củng cố lại.</div>`;
-      } else {
-        boxFeedback = `<div class="p-2 bg-blue-50 border border-blue-200 text-blue-800 rounded">Đã đạt mức tối đa (Hộp 5/5).</div>`;
-      }
-    } else {
-      boxFeedback = `<div class="p-2 bg-slate-50 border border-slate-200 text-slate-700 rounded">Chế độ Chép hoàn tất. Hãy thử thách bằng "Chế độ Nhớ" để thăng hạng hộp Leitner!</div>`;
-    }
-
-    body.innerHTML = `
-      <div class="grid grid-cols-2 gap-2 text-left bg-slate-50 p-3 rounded text-xs mb-3">
-        <div>Tốc độ gõ: <strong class="font-mono text-slate-900">${metrics.wpm} WPM</strong></div>
-        <div>Độ chính xác: <strong class="font-mono text-slate-900">${metrics.acc}%</strong></div>
-        <div>Lỗi bấm sai: <strong class="font-mono text-rose-700">${metrics.errors}</strong></div>
-        <div>Thời gian: <strong class="font-mono text-slate-900">${Math.round(metrics.elapsedMs / 1000)}s</strong></div>
+        <!-- Bottom Action Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200 text-xs">
+          <div class="text-slate-500">
+            Mẹo: Bạn có thể chọn <strong>"Sửa tiếp code vừa gõ"</strong> để hoàn thiện những chỗ còn sai lệch mà không phải gõ lại từ đầu!
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="btn-bottom-retry" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded font-medium cursor-pointer">
+              Gõ lại từ đầu
+            </button>
+            <button id="btn-bottom-edit" class="px-3.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 rounded font-medium cursor-pointer">
+              Sửa tiếp code
+            </button>
+            <button id="btn-bottom-back" class="px-3.5 py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded font-medium cursor-pointer">
+              Về kho thuật toán
+            </button>
+          </div>
+        </div>
       </div>
-      ${boxFeedback}
     `;
 
-    modal.classList.remove('hidden');
+    // Bindings in Diff View
+    container.querySelector('#btn-diff-retry')?.addEventListener('click', () => {
+      userTypedCode = '';
+      typingStartTime = Date.now();
+      isDiffActive = false;
+      isTypingActive = true;
+      renderTypingRoom();
+    });
+    container.querySelector('#btn-bottom-retry')?.addEventListener('click', () => {
+      userTypedCode = '';
+      typingStartTime = Date.now();
+      isDiffActive = false;
+      isTypingActive = true;
+      renderTypingRoom();
+    });
 
-    container.querySelector('#btn-modal-qa')?.addEventListener('click', () => {
-      modal.classList.add('hidden');
+    container.querySelector('#btn-diff-edit-continue')?.addEventListener('click', () => {
+      isDiffActive = false;
+      isTypingActive = true;
+      renderTypingRoom();
+    });
+    container.querySelector('#btn-bottom-edit')?.addEventListener('click', () => {
+      isDiffActive = false;
+      isTypingActive = true;
+      renderTypingRoom();
+    });
+
+    container.querySelector('#btn-diff-qa')?.addEventListener('click', () => {
+      isDiffActive = false;
       isTypingActive = false;
       isQAActive = true;
       render();
     });
 
-    container.querySelector('#btn-modal-retry')?.addEventListener('click', () => {
-      modal.classList.add('hidden');
-      renderTypingRoom();
+    container.querySelector('#btn-diff-back-catalog')?.addEventListener('click', () => {
+      isDiffActive = false;
+      isTypingActive = false;
+      renderAlgoCatalog();
+    });
+    container.querySelector('#btn-bottom-back')?.addEventListener('click', () => {
+      isDiffActive = false;
+      isTypingActive = false;
+      renderAlgoCatalog();
     });
 
-    container.querySelector('#btn-modal-back')?.addEventListener('click', () => {
-      modal.classList.add('hidden');
-      isTypingActive = false;
-      render();
+    container.querySelector('#btn-re-ai-analyze')?.addEventListener('click', () => {
+      fetchAIAnalysis(algo.titleVi || algo.title, algo.code, userTypedCode, accuracy);
     });
   }
 
