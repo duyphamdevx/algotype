@@ -4,6 +4,7 @@
 export const BUILTIN_ALGOS = [
   {
     id: "segtree_point_range",
+    titleVi: "Cây phân đoạn (Cập nhật điểm, Tính tổng đoạn)",
     title: "Segment Tree (Point Update, Range Sum)",
     tag: "Data Structures",
     code: `// Segment Tree with point update and range sum query
@@ -33,6 +34,7 @@ long long query(int node, int l, int r, int ql, int qr) {
   },
   {
     id: "segtree_lazy",
+    titleVi: "Cây phân đoạn Lazy (Cập nhật đoạn, Truy vấn đoạn)",
     title: "Segment Tree (Lazy Propagation)",
     tag: "Data Structures",
     code: `// Segment Tree with lazy propagation (Range Add, Range Sum)
@@ -76,6 +78,7 @@ long long query_range(int node, int l, int r, int ql, int qr) {
   },
   {
     id: "fenwick_tree",
+    titleVi: "Cây Fenwick (Cây chỉ số nhị phân - BIT)",
     title: "Fenwick Tree (Binary Indexed Tree)",
     tag: "Data Structures",
     code: `// Fenwick Tree (Point Add, Prefix Sum)
@@ -107,6 +110,7 @@ struct Fenwick {
   },
   {
     id: "dsu",
+    titleVi: "Tập hợp rời nhau DSU (Nén đường đi & Gộp hạng)",
     title: "Disjoint Set Union (DSU with Path Compression & Rank)",
     tag: "Data Structures",
     code: `// Disjoint Set Union
@@ -139,6 +143,7 @@ struct DSU {
   },
   {
     id: "dijkstra",
+    titleVi: "Thuật toán Dijkstra (Tìm đường đi ngắn nhất)",
     title: "Dijkstra (Shortest Path)",
     tag: "Graph",
     code: `// Dijkstra Algorithm with priority_queue
@@ -174,6 +179,7 @@ vector<long long> dijkstra(int n, int start, const vector<vector<pair<int, long 
   },
   {
     id: "bellman_ford",
+    titleVi: "Thuật toán Bellman-Ford (Cạnh âm & Chu trình âm)",
     title: "Bellman-Ford (Negative Edge & Cycle Detection)",
     tag: "Graph",
     code: `// Bellman-Ford algorithm
@@ -210,6 +216,7 @@ bool bellman_ford(int n, int start, const vector<Edge>& edges, vector<long long>
   },
   {
     id: "floyd_warshall",
+    titleVi: "Thuật toán Floyd-Warshall (Đường đi ngắn nhất mọi cặp đỉnh)",
     title: "Floyd-Warshall (All Pairs Shortest Paths)",
     tag: "Graph",
     code: `// Floyd-Warshall Algorithm
@@ -232,6 +239,7 @@ void floyd_warshall(int n, vector<vector<long long>>& dist) {
   },
   {
     id: "tarjan_scc",
+    titleVi: "Thuật toán Tarjan (Thành phần liên thông mạnh SCC)",
     title: "Tarjan's Strongly Connected Components (SCC)",
     tag: "Graph",
     code: `// Tarjan algorithm for Strongly Connected Components
@@ -274,6 +282,7 @@ void dfs(int u) {
   },
   {
     id: "bridges_articulations",
+    titleVi: "Tìm Cầu và Khớp trên đồ thị",
     title: "Bridges and Articulation Points",
     tag: "Graph",
     code: `// Find bridges and articulation points in an undirected graph
@@ -313,6 +322,7 @@ void dfs(int u, int p = -1) {
   },
   {
     id: "dinic_max_flow",
+    titleVi: "Thuật toán Dinic (Luồng cực đại trên đồ thị)",
     title: "Dinic Max Flow",
     tag: "Graph",
     code: `// Dinic Maximum Flow Algorithm
@@ -384,6 +394,7 @@ struct Dinic {
   },
   {
     id: "lca_binary_lifting",
+    titleVi: "Tổ tiên chung gần nhất LCA (Nhảy nhị phân)",
     title: "Lowest Common Ancestor (Binary Lifting)",
     tag: "Trees",
     code: `// LCA using Binary Lifting
@@ -426,6 +437,7 @@ int get_lca(int u, int v) {
   },
   {
     id: "heavy_light_decomposition",
+    titleVi: "Phân rã cây nặng nhẹ HLD (Heavy-Light Decomposition)",
     title: "Heavy-Light Decomposition (HLD)",
     tag: "Trees",
     code: `// Heavy-Light Decomposition
@@ -468,6 +480,7 @@ void decompose(int u, int h) {
   },
   {
     id: "centroid_decomposition",
+    titleVi: "Phân rã trọng tâm cây (Centroid Decomposition)",
     title: "Centroid Decomposition",
     tag: "Trees",
     code: `// Centroid Decomposition of a Tree
@@ -512,6 +525,7 @@ void build_centroid_tree(int u) {
   },
   {
     id: "kmp_string_matching",
+    titleVi: "Thuật toán khớp chuỗi KMP (Knuth-Morris-Pratt)",
     title: "KMP String Matching",
     tag: "Strings",
     code: `// Knuth-Morris-Pratt Algorithm
@@ -545,6 +559,7 @@ vector<int> kmp_search(const string& text, const string& pat) {
   },
   {
     id: "z_algorithm",
+    titleVi: "Mảng Z & Thuật toán so khớp chuỗi Z-Algorithm",
     title: "Z-Algorithm",
     tag: "Strings",
     code: `// Z-Algorithm for string matching
@@ -568,6 +583,7 @@ vector<int> compute_z(const string& s) {
   },
   {
     id: "manacher",
+    titleVi: "Thuật toán Manacher (Tìm chuỗi đối xứng con dài nhất)",
     title: "Manacher's Algorithm (Palindromic Substrings)",
     tag: "Strings",
     code: `// Manacher's Algorithm for Longest Palindromic Substrings
@@ -600,6 +616,7 @@ vector<int> manacher(const string& s) {
   },
   {
     id: "trie",
+    titleVi: "Cây tiền tố Trie (Tra cứu & Thêm xâu ký tự)",
     title: "Trie (Prefix Tree)",
     tag: "Strings",
     code: `// Prefix Tree (Trie)
@@ -644,6 +661,7 @@ struct Trie {
   },
   {
     id: "aho_corasick",
+    titleVi: "Tự động hóa Aho-Corasick (Khớp nhiều mẫu chuỗi)",
     title: "Aho-Corasick Automaton",
     tag: "Strings",
     code: `// Aho-Corasick Multiple Pattern String Matching
@@ -698,6 +716,7 @@ void build_automaton() {
   },
   {
     id: "matrix_exponentiation",
+    titleVi: "Lũy thừa ma trận (Nhân ma trận & Fibonacci lớn)",
     title: "Matrix Exponentiation",
     tag: "Math",
     code: `// Matrix Exponentiation for Linear Recurrences
@@ -736,6 +755,7 @@ Matrix power(Matrix a, long long exp) {
   },
   {
     id: "extended_gcd_mod_inverse",
+    titleVi: "Euclid mở rộng & Nghịch đảo Modulo (Extended GCD)",
     title: "Extended GCD and Modular Inverse",
     tag: "Math",
     code: `// Extended Euclidean Algorithm and Modular Inverse
@@ -764,6 +784,7 @@ long long mod_inverse(long long a, long long m) {
   },
   {
     id: "combinatorics_ncr",
+    titleVi: "Tổ hợp chập K (nCr tiền xử lý giai thừa & Modulo)",
     title: "Combinatorics (nCr with Precomputed Factorials)",
     tag: "Math",
     code: `// Precompute factorials and inverses for combinations nCr mod P
@@ -799,6 +820,7 @@ long long nCr(int n, int r) {
   },
   {
     id: "linear_sieve",
+    titleVi: "Sàng nguyên tố tuyến tính (Sàng Euler & Ước nguyên tố nhỏ nhất)",
     title: "Linear Sieve (Euler Sieve & Smallest Prime Factor)",
     tag: "Math",
     code: `// Linear Sieve O(N) with SPF (Smallest Prime Factor)
@@ -824,6 +846,7 @@ void linear_sieve(int n) {
   },
   {
     id: "lucas_theorem_mod_p",
+    titleVi: "Định lý Lucas (Tính nCr theo Modulo nguyên tố P nhỏ)",
     title: "Lucas Theorem (nCr mod Prime P)",
     tag: "Math",
     code: `// Lucas Theorem for nCr mod prime P
@@ -857,6 +880,7 @@ long long lucas(long long n, long long r, long long p) {
   },
   {
     id: "miller_rabin_pollard_rho",
+    titleVi: "Kiểm tra số nguyên tố Miller-Rabin & Phân tích Pollard Rho",
     title: "Miller-Rabin Primality Test",
     tag: "Math",
     code: `// Deterministic Miller-Rabin Primality Test for 64-bit int
@@ -905,6 +929,7 @@ bool miller_rabin(u64 n) {
   },
   {
     id: "mos_algorithm",
+    titleVi: "Thuật toán Mo (Xử lý truy vấn đoạn Offline)",
     title: "Mo's Algorithm (Offline Range Queries)",
     tag: "Advanced",
     code: `// Mo's Algorithm with Hilbert / Block ordering
@@ -948,6 +973,7 @@ void process_queries(vector<Query>& queries, vector<long long>& answers) {
   },
   {
     id: "two_sat",
+    titleVi: "Bài toán 2-SAT (Thỏa mãn 2 biến qua liên thông mạnh)",
     title: "2-SAT (2-Satisfiability via SCC)",
     tag: "Graph",
     code: `// 2-SAT Solver using Kosaraju / Tarjan
@@ -1004,6 +1030,7 @@ struct TwoSat {
   },
   {
     id: "convex_hull_graham",
+    titleVi: "Bao lồi tập điểm (Thuật toán Andrew Monotone Chain / Graham)",
     title: "Convex Hull (Monotone Chain / Graham Scan)",
     tag: "Geometry",
     code: `// Convex Hull (Andrew's Monotone Chain)
@@ -1043,6 +1070,7 @@ vector<Point> convex_hull(vector<Point>& pts) {
   },
   {
     id: "point_in_polygon",
+    titleVi: "Kiểm tra điểm nằm trong đa giác (Chiếu tia Ray Casting)",
     title: "Point in Polygon (Ray Casting & Winding Number)",
     tag: "Geometry",
     code: `// Check if point is inside, on boundary, or outside polygon
@@ -1080,6 +1108,7 @@ int point_in_polygon(Point p, const vector<Point>& poly) {
   },
   {
     id: "bitset_optimizations",
+    titleVi: "Tối ưu Bitset (Khả năng đến được & Đếm tập con)",
     title: "Bitset Graph Reachability & Subsets",
     tag: "Advanced",
     code: `// Bitset Transitive Closure and Subset Counting
@@ -1100,6 +1129,7 @@ void transitive_closure(int n) {
   },
   {
     id: "knapsack_01_space_opt",
+    titleVi: "Quy hoạch động Ba lô 0-1 (Tối ưu mảng 1 chiều)",
     title: "0-1 Knapsack (1D Space Optimized)",
     tag: "Dynamic Programming",
     code: `// 0-1 Knapsack with 1D DP Array
@@ -1118,6 +1148,7 @@ long long knapsack(int n, int max_w, const vector<int>& weight, const vector<lon
   },
   {
     id: "lis_nlogn",
+    titleVi: "Dãy con tăng dài nhất LIS O(N log N)",
     title: "Longest Increasing Subsequence O(N log N)",
     tag: "Dynamic Programming",
     code: `// LIS in O(N log N) using patience sorting / lower_bound
@@ -1139,6 +1170,7 @@ int longest_increasing_subsequence(const vector<int>& a) {
   },
   {
     id: "sos_dp",
+    titleVi: "Quy hoạch động SOS DP (Sum Over Subsets - Tổng tập con)",
     title: "Sum Over Subsets (SOS) DP",
     tag: "Dynamic Programming",
     code: `// SOS DP: Compute sum of submasks in O(N * 2^N)
@@ -1158,6 +1190,7 @@ void sos_dp(int n, vector<long long>& f) {
   },
   {
     id: "dp_digit",
+    titleVi: "Quy hoạch động chữ số (Digit DP)",
     title: "Digit DP (Counting Numbers with Properties)",
     tag: "Dynamic Programming",
     code: `// Digit DP template: count valid integers in range [0, S]
@@ -1185,6 +1218,7 @@ long long dp(int pos, bool is_tight, bool is_leading_zero) {
   },
   {
     id: "fast_io",
+    titleVi: "Đọc ghi nhanh Fast I/O & Phép tính số học Modulo",
     title: "Fast I/O & Modular Arithmetic Helpers",
     tag: "Utility",
     code: `// Fast I/O and Standard Competitive Programming Template
@@ -1206,6 +1240,7 @@ long long mul_mod(long long a, long long b, long long m) {
   },
   {
     id: "hash_string_double",
+    titleVi: "Băm chuỗi kép (Double Rolling Hash chống tràn đụng độ)",
     title: "Double String Hash (Rolling Hash)",
     tag: "Strings",
     code: `// Double Rolling Hash for fast substring equality

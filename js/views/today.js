@@ -128,7 +128,8 @@ export function renderTodayView(container, { onStartTyping, onOpenProblem }) {
                           Mức ${stat.box}/5 (${daysInterval} ngày)
                         </span>
                       </div>
-                      <h3 class="font-semibold text-slate-900 text-base leading-snug">${algo.title}</h3>
+                      <h3 class="font-semibold text-slate-900 text-base leading-snug">${algo.titleVi || algo.title}</h3>
+                      ${algo.titleVi && algo.titleVi !== algo.title ? `<div class="text-xs text-slate-500 font-mono mt-0.5">${algo.title}</div>` : ''}
                       <div class="mt-2 text-xs text-slate-500 space-y-0.5">
                         <div>Đã gõ: <span class="font-mono text-slate-700">${stat.runs || 0}</span> lần</div>
                         <div>Tốc độ tốt nhất: <span class="font-mono text-slate-700">${stat.bw || 0}</span> WPM</div>

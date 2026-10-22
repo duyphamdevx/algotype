@@ -222,6 +222,19 @@ class Store {
       }
     });
 
+    // Propagate Vietnamese titles (titleVi) from builtins to existing saved data
+    const builtinMap = new Map();
+    BUILTIN_ALGOS.forEach(b => builtinMap.set(b.id, b));
+    STRESS_TEST_SNIPPETS.forEach(s => builtinMap.set(s.id, s));
+    if (Array.isArray(data.algos)) {
+      data.algos.forEach(a => {
+        const b = builtinMap.get(a.id);
+        if (b && b.titleVi) {
+          a.titleVi = b.titleVi;
+        }
+      });
+    }
+
     if (!Array.isArray(data.custom)) data.custom = [];
     if (!data.stats || typeof data.stats !== 'object') data.stats = {};
     if (!Array.isArray(data.hist)) data.hist = [];
@@ -301,6 +314,7 @@ class Store {
     const newAlgo = {
       id,
       title: algo.title.trim(),
+      titleVi: (algo.titleVi || algo.title).trim(),
       tag: algo.tag.trim() || 'Custom',
       code: algo.code
     };
@@ -310,12 +324,13 @@ class Store {
     return newAlgo;
   }
 
-  updateAlgo(id, { title, tag, code }) {
+  updateAlgo(id, { title, titleVi, tag, code }) {
     const idx = (this.db.algos || []).findIndex(a => a.id === id);
     if (idx !== -1) {
       this.db.algos[idx] = {
         ...this.db.algos[idx],
         title: title.trim(),
+        titleVi: (titleVi !== undefined ? titleVi : (this.db.algos[idx].titleVi || title)).trim(),
         tag: tag.trim() || 'General',
         code: code
       };

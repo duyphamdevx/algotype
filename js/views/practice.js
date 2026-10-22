@@ -44,9 +44,11 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
     const tags = ['ALL', ...new Set(allAlgos.map(a => a.tag))];
 
     const filtered = allAlgos.filter(a => {
+      const q = searchQuery.toLowerCase();
       const matchSearch =
-        a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        a.code.toLowerCase().includes(searchQuery.toLowerCase());
+        a.title.toLowerCase().includes(q) ||
+        (a.titleVi && a.titleVi.toLowerCase().includes(q)) ||
+        a.code.toLowerCase().includes(q);
       const matchTag = selectedTag === 'ALL' || a.tag === selectedTag;
       return matchSearch && matchTag;
     });
@@ -58,7 +60,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
           <div>
             <h2 class="text-2xl font-bold tracking-tight text-slate-900 font-serif">Kho Template Thuật toán</h2>
             <p class="text-sm text-slate-600 mt-0.5">
-              ${allAlgos.length} thuật toán C++17. Bạn có thể <strong>thêm mới, sửa đổi, xóa bất kỳ thuật toán nào</strong> hoặc <strong>nhập file .cpp tự động tách đoạn</strong>.
+              ${allAlgos.length} thuật toán C++17 kèm tên Tiếng Việt & Quốc tế chuẩn. Bạn có thể <strong>thêm mới, sửa đổi, xóa bất kỳ thuật toán nào</strong> hoặc <strong>nhập file .cpp tự động tách đoạn</strong>.
             </p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
@@ -81,7 +83,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
           <input
             id="search-algo-input"
             type="text"
-            placeholder="Tìm kiếm theo tên thuật toán hoặc mã nguồn..."
+            placeholder="Tìm theo tên tiếng Việt, tên tiếng Anh hoặc code (vd: cây phân đoạn, segtree, dijkstra...)..."
             value="${searchQuery}"
             class="px-3.5 py-2 bg-white border border-slate-300 rounded text-sm w-full sm:max-w-md focus:outline-none focus:border-blue-700"
           />
@@ -142,7 +144,8 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
                           </div>
                         </div>
 
-                        <h3 class="font-semibold text-slate-900 text-base leading-snug">${algo.title}</h3>
+                        <h3 class="font-semibold text-slate-900 text-base leading-snug">${algo.titleVi || algo.title}</h3>
+                        ${algo.titleVi && algo.titleVi !== algo.title ? `<div class="text-xs text-slate-500 font-mono mt-0.5">${algo.title}</div>` : ''}
 
                         <div class="mt-2 text-xs text-slate-500 space-y-0.5">
                           <div>Đã gõ: <span class="font-mono text-slate-700">${stat.runs || 0}</span> lần · Kỷ lục: <span class="font-mono text-slate-700">${stat.bw || 0}</span> WPM</div>
@@ -191,10 +194,14 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
           </div>
           <div class="space-y-3 text-sm">
             <input type="hidden" id="input-edit-algo-id" value="" />
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label class="block font-semibold text-slate-700 mb-1">Tên thuật toán</label>
-                <input id="input-edit-title" type="text" placeholder="Ví dụ: Segment Tree, Tarjan SCC..." class="w-full px-3 py-1.5 border rounded focus:outline-blue-700" />
+                <label class="block font-semibold text-slate-700 mb-1">Tên Tiếng Việt</label>
+                <input id="input-edit-title-vi" type="text" placeholder="Ví dụ: Cây phân đoạn (Segment Tree)..." class="w-full px-3 py-1.5 border rounded focus:outline-blue-700" />
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1">Tên Tiếng Anh / Quốc tế</label>
+                <input id="input-edit-title" type="text" placeholder="Ví dụ: Segment Tree..." class="w-full px-3 py-1.5 border rounded focus:outline-blue-700" />
               </div>
               <div>
                 <label class="block font-semibold text-slate-700 mb-1">Chủ đề / Nhóm (Tag)</label>
@@ -299,6 +306,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
     container.querySelector('#btn-add-new-algo')?.addEventListener('click', () => {
       container.querySelector('#modal-editor-title').textContent = 'Thêm Thuật toán Mới';
       container.querySelector('#input-edit-algo-id').value = '';
+      container.querySelector('#input-edit-title-vi').value = '';
       container.querySelector('#input-edit-title').value = '';
       container.querySelector('#input-edit-tag').value = 'General';
       container.querySelector('#input-edit-code').value = '// Type your C++ template here...\n#include <bits/stdc++.h>\nusing namespace std;\n';
@@ -311,8 +319,9 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
         const id = btn.getAttribute('data-algo-id');
         const a = store.getAlgoById(id);
         if (!a) return;
-        container.querySelector('#modal-editor-title').textContent = `Chỉnh sửa: ${a.title}`;
+        container.querySelector('#modal-editor-title').textContent = `Chỉnh sửa: ${a.titleVi || a.title}`;
         container.querySelector('#input-edit-algo-id').value = a.id;
+        container.querySelector('#input-edit-title-vi').value = a.titleVi || a.title;
         container.querySelector('#input-edit-title').value = a.title;
         container.querySelector('#input-edit-tag').value = a.tag;
         container.querySelector('#input-edit-code').value = a.code;
@@ -326,7 +335,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-algo-id');
         const a = store.getAlgoById(id);
-        if (confirm(`Bạn có chắc chắn muốn XÓA thuật toán "${a?.title}" không?`)) {
+        if (confirm(`Bạn có chắc chắn muốn XÓA thuật toán "${a?.titleVi || a?.title}" không?`)) {
           store.deleteAlgo(id);
           renderAlgoCatalog();
         }
@@ -337,7 +346,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
     modalDeleteBtn?.addEventListener('click', () => {
       const editId = container.querySelector('#input-edit-algo-id').value;
       const a = store.getAlgoById(editId);
-      if (confirm(`Bạn có chắc muốn XÓA thuật toán "${a?.title}" khỏi thư viện?`)) {
+      if (confirm(`Bạn có chắc muốn XÓA thuật toán "${a?.titleVi || a?.title}" khỏi thư viện?`)) {
         store.deleteAlgo(editId);
         editorModal.classList.add('hidden');
         renderAlgoCatalog();
@@ -353,7 +362,8 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
 
     container.querySelector('#btn-save-algo-modal')?.addEventListener('click', () => {
       const editId = container.querySelector('#input-edit-algo-id').value;
-      const title = container.querySelector('#input-edit-title').value;
+      const titleVi = container.querySelector('#input-edit-title-vi').value;
+      const title = container.querySelector('#input-edit-title').value || titleVi;
       const tag = container.querySelector('#input-edit-tag').value;
       const code = container.querySelector('#input-edit-code').value;
 
@@ -363,9 +373,9 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
       }
 
       if (editId) {
-        store.updateAlgo(editId, { title, tag, code });
+        store.updateAlgo(editId, { title, titleVi, tag, code });
       } else {
-        store.addCustomAlgo({ title, tag, code });
+        store.addCustomAlgo({ title, titleVi, tag, code });
       }
       editorModal.classList.add('hidden');
       renderAlgoCatalog();
@@ -391,7 +401,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
               ← Trở về kho
             </button>
             <div>
-              <h2 class="font-bold text-slate-900 text-base leading-tight">Điền Khuyết: ${algo.title}</h2>
+              <h2 class="font-bold text-slate-900 text-base leading-tight">Điền Khuyết: ${algo.titleVi || algo.title}</h2>
               <div class="text-xs text-slate-500">
                 ${blanks.length} chỗ trống · ${isAuto ? 'Tự động ẩn 30% dòng vòng lặp/toán tử' : 'Chỗ trống chỉ định «...»'}
               </div>
@@ -511,7 +521,7 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
               ← Trở về kho
             </button>
             <div>
-              <h2 class="font-bold text-slate-900 text-base leading-tight">Câu Hỏi Tự Kiểm: ${algo.title}</h2>
+              <h2 class="font-bold text-slate-900 text-base leading-tight">Câu Hỏi Tự Kiểm: ${algo.titleVi || algo.title}</h2>
               <div class="text-xs text-slate-500">
                 Kiểm chứng mức độ hiểu sâu bản chất thuật toán (bất biến, thứ tự, trường hợp biên)
               </div>
@@ -632,7 +642,10 @@ export function renderPracticeView(container, { initialAlgoId = null, initialMod
               ← Trở về kho
             </button>
             <div>
-              <h2 class="font-bold text-slate-900 text-base leading-tight">${algo.title}</h2>
+              <h2 class="font-bold text-slate-900 text-base leading-tight">
+                ${algo.titleVi || algo.title}
+                ${algo.titleVi && algo.titleVi !== algo.title ? `<span class="text-xs font-normal text-slate-500 font-mono block sm:inline">(${algo.title})</span>` : ''}
+              </h2>
               <div class="text-xs text-slate-500">
                 ${algo.tag} · Mức Leitner: <span class="font-semibold text-slate-800">${stat.box}/5</span>
               </div>
