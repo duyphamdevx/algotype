@@ -1,0 +1,8 @@
+{
+  "name": "AlgoType - Ôn thi Olympic Tin học C++",
+  "description": "Nền tảng ôn thi Olympic Tin học Sinh viên Chuyên tin: Luyện gõ thuộc template C++, sổ điều then chốt, kho đề 2020-2025, sổ lỗi và bài biến thể.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
